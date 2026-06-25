@@ -8,6 +8,7 @@
     "scheme": "meta-moto",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "owner": "zeroriscov4",
     "splash": {
       "image": "./assets/images/icon.png",
       "resizeMode": "contain",
@@ -46,6 +47,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "121c64f5-b7c3-4811-83db-4a5940e29b28"
+      }
     }
   }
 }
