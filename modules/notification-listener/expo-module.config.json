@@ -1,9 +1,0 @@
-{
-  "platforms": ["android"],
-  "android": {
-    "package": "com.metamoto.app",
-    "modules": [
-      "com.metamoto.app.NotificationListenerModule"
-    ]
-  }
-}
