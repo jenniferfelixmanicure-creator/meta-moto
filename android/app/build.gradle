@@ -4,6 +4,13 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// ── Lê key.properties gerado pelo CI (ou local) ──────────────────────────
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace "com.metamoto.meta_moto"
     compileSdk 34
@@ -13,25 +20,39 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-
     kotlinOptions {
         jvmTarget = "1.8"
     }
 
     defaultConfig {
         applicationId "com.metamoto.meta_moto"
-        minSdk 23           // Android 6.0+ (NotificationListenerService estável)
+        minSdk 23
         targetSdk 34
         versionCode flutter.versionCode
         versionName flutter.versionName
-
-        // Necessário para flutter_overlay_window
         multiDexEnabled true
+    }
+
+    // ── Configuração de assinatura ────────────────────────────────────────
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile     file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias      keystoreProperties['keyAlias']
+                keyPassword   keystoreProperties['keyPassword']
+            }
+        }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug   // substitua por sua keystore para produção
+            // Usa assinatura com keystore se key.properties existir,
+            // senão usa debug (apenas para build local sem CI)
+            signingConfig keystorePropertiesFile.exists()
+                ? signingConfigs.release
+                : signingConfigs.debug
+
             minifyEnabled false
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -48,6 +69,5 @@ flutter {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    // multidex (para dispositivos API < 21, mas boa prática incluir)
     implementation 'androidx.multidex:multidex:2.0.1'
 }
