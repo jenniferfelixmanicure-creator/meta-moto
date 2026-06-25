@@ -1,7 +1,6 @@
 {
   "cli": {
-    "version": ">= 7.0.0",
-    "promptToInstallUpdate": false
+    "version": ">= 7.0.0"
   },
   "build": {
     "preview": {
