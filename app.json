@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "meta-moto",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "owner": "zeroriscov4",
     "splash": {
       "image": "./assets/images/icon.png",
