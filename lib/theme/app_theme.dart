@@ -18,6 +18,7 @@ class AppColors {
   // Acentos
   static const Color silver       = Color(0xFFD4D4D4); // prata da logo (olhos)
   static const Color silverDim    = Color(0xFF888888); // prata escuro
+  static const Color accent       = Color(0xFFD10000); // vermelho de destaque
   static const Color white        = Color(0xFFFFFFFF);
 
   // Textos
@@ -80,7 +81,7 @@ class AppTheme {
           color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w700),
         iconTheme: const IconThemeData(color: AppColors.textSecondary),
       ),
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: AppColors.cardBg,
         elevation: 0,
         margin: EdgeInsets.zero,
@@ -151,7 +152,7 @@ class AppTheme {
         thickness: 1,
       ),
       iconTheme: const IconThemeData(color: AppColors.textSecondary, size: 22),
-      dialogTheme: DialogThemeData(
+      dialogTheme: DialogTheme(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         titleTextStyle: GoogleFonts.inter(
@@ -168,7 +169,7 @@ class AppTheme {
         circularTrackColor: AppColors.surfaceLight,
         linearTrackColor: AppColors.surfaceLight,
       ),
-      tabBarTheme: TabBarThemeData(
+      tabBarTheme: TabBarTheme(
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textMuted,
         indicatorColor: AppColors.primary,

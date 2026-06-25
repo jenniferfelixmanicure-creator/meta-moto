@@ -52,7 +52,6 @@ class OverlayService {
         enableDrag: true,
         overlayTitle: 'Meta Moto',
         overlayContent: 'Corrida detectada',
-        startPosition: const OverlayPosition(0, -100),
       );
       _overlayAtivo = true;
     }
