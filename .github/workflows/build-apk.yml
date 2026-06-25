@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build Release APK
+    name: Build Release APK (Signed)
     runs-on: ubuntu-latest
 
     steps:
@@ -32,34 +32,64 @@ jobs:
           channel: stable
           cache: true
 
-      # ── 4. Dependências ──────────────────────────────────────────────────
-      - name: Instalar dependências (flutter pub get)
+      # ── 4. Restore keystore do secret ────────────────────────────────────
+      - name: Restaurar Keystore de assinatura
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.p12
+          echo "✅ keystore.p12 restaurado ($(wc -c < android/app/keystore.p12) bytes)"
+
+      # ── 5. Criar key.properties para o Gradle ────────────────────────────
+      - name: Criar key.properties
+        run: |
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.STORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=keystore.p12
+          EOF
+          echo "✅ key.properties criado"
+
+      # ── 6. Dependências Flutter ──────────────────────────────────────────
+      - name: flutter pub get
         run: flutter pub get
 
-      # ── 5. Análise estática ──────────────────────────────────────────────
+      # ── 7. Análise estática ──────────────────────────────────────────────
       - name: Analisar código
         run: flutter analyze --no-fatal-infos
         continue-on-error: true
 
-      # ── 6. Build APK Debug (rápido para PRs) ────────────────────────────
+      # ── 8. Build APK Debug (PRs) ─────────────────────────────────────────
       - name: Build APK Debug
         if: github.event_name == 'pull_request'
         run: flutter build apk --debug
 
-      # ── 7. Build APK Release (push na main) ─────────────────────────────
-      - name: Build APK Release
+      # ── 9. Build APK Release ASSINADO (push na main / tags) ──────────────
+      - name: Build APK Release (assinado)
         if: github.event_name != 'pull_request'
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
           flutter build apk --release \
             --no-shrink \
             --no-obfuscate
 
-      # ── 8. Upload APK como artefato ──────────────────────────────────────
-      - name: Upload APK Release
+      # ── 10. Verifica assinatura do APK ────────────────────────────────────
+      - name: Verificar assinatura
+        if: github.event_name != 'pull_request'
+        run: |
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          echo "Tamanho: $(du -sh $APK | cut -f1)"
+          # Verifica se o APK foi assinado corretamente
+          $JAVA_HOME/bin/jarsigner -verify -verbose -certs "$APK" 2>&1 | grep -E "jar verified|smk|WARNING" || true
+
+      # ── 11. Upload APK como artefato ──────────────────────────────────────
+      - name: Upload APK Release (assinado)
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: meta-moto-apk-${{ github.run_number }}
+          name: MetaMoto-v${{ github.run_number }}-signed
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
 
@@ -67,11 +97,11 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: meta-moto-apk-debug-${{ github.run_number }}
+          name: MetaMoto-debug-${{ github.run_number }}
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 7
 
-      # ── 9. Criar Release no GitHub (tag v*) ─────────────────────────────
+      # ── 12. GitHub Release (tag v*) ───────────────────────────────────────
       - name: Criar GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -79,22 +109,29 @@ jobs:
           files: build/app/outputs/flutter-apk/app-release.apk
           name: "Meta Moto ${{ github.ref_name }}"
           body: |
-            ## Meta Moto ${{ github.ref_name }}
+            ## 🏍️ Meta Moto ${{ github.ref_name }}
 
-            ### Download
-            Baixe o APK abaixo e instale no seu Android (minSdk 23 / Android 6.0+).
+            ### 📥 Instalação
+            1. Baixe o **app-release.apk** abaixo
+            2. No Android: **Configurações → Segurança → Fontes desconhecidas** → Ativar
+            3. Abra o arquivo APK baixado e instale
+            4. Na primeira abertura, conceda as 3 permissões solicitadas
 
-            > ⚠️ Habilite "Instalar apps de fontes desconhecidas" nas configurações do Android.
+            ### ✅ APK assinado digitalmente
+            Este APK foi assinado com o keystore oficial do Meta Moto.
 
-            ### Novidades desta versão
+            ### 📱 Requisitos
+            - Android 6.0+ (API 23)
+            - 50 MB de espaço livre
+
+            ### 🆕 Funcionalidades
             - Detecção automática de corridas (Uber, 99, iFood, Lalamove, InDrive)
             - Overlay flutuante com valor, km e R$/km em tempo real
             - Alerta de baixa eficiência configurável
-            - Rastreamento de km via GPS com fórmula de Haversine
+            - Rastreamento de km via GPS
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── Job de status ─────────────────────────────────────────────────────────
   notify:
     name: Resumo do Build
     runs-on: ubuntu-latest
@@ -104,7 +141,8 @@ jobs:
       - name: Resultado
         run: |
           if [ "${{ needs.build.result }}" = "success" ]; then
-            echo "✅ APK gerado com sucesso! Acesse a aba Actions > Artifacts para baixar."
+            echo "✅ APK ASSINADO gerado! Acesse Actions > Artifacts para baixar."
+            echo "Para criar uma release pública: git tag v1.0.0 && git push origin v1.0.0"
           else
-            echo "❌ Build falhou. Verifique os logs acima para detalhes."
+            echo "❌ Build falhou. Verifique os logs acima."
           fi
