@@ -37,8 +37,34 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build APK (preview)
-        run: eas build --platform android --profile ${{ github.event.inputs.profile || 'preview' }} --non-interactive
+      - name: Build APK no EAS e salvar URL
+        id: build
+        run: |
+          BUILD_JSON=$(eas build \
+            --platform android \
+            --profile ${{ github.event.inputs.profile || 'preview' }} \
+            --non-interactive \
+            --json 2>/dev/null | tail -1)
+          echo "build_json=$BUILD_JSON" >> $GITHUB_OUTPUT
+          APK_URL=$(echo "$BUILD_JSON" | jq -r '.[0].artifacts.buildUrl // .[0].artifacts.applicationArchiveUrl // empty')
+          echo "apk_url=$APK_URL" >> $GITHUB_OUTPUT
+          echo "URL do APK: $APK_URL"
 
-      - name: Link do APK
-        run: echo "Acesse expo.dev/accounts/jenniferfelixmanicure-creator/projects/meta-moto/builds para baixar o APK"
+      - name: Baixar APK do EAS
+        run: |
+          APK_URL="${{ steps.build.outputs.apk_url }}"
+          if [ -z "$APK_URL" ]; then
+            echo "URL do APK nao encontrada no JSON, tentando via eas build:list..."
+            APK_URL=$(eas build:list --platform android --limit 1 --json --non-interactive 2>/dev/null \
+              | jq -r '.[0].artifacts.buildUrl // .[0].artifacts.applicationArchiveUrl // empty')
+          fi
+          echo "Baixando APK de: $APK_URL"
+          curl -L "$APK_URL" -o meta-moto.apk
+          ls -lh meta-moto.apk
+
+      - name: Publicar APK como artefato do GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: meta-moto-apk-${{ github.run_number }}
+          path: meta-moto.apk
+          retention-days: 30
