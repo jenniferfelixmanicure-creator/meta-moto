@@ -1,0 +1,98 @@
+workflows:
+
+  # ─────────────────────────────────────────────────────────────
+  # Opção 1: Build via EAS (Expo Cloud) — mais simples
+  # Requer: variável EXPO_TOKEN configurada no Codemagic
+  # ─────────────────────────────────────────────────────────────
+  android-eas:
+    name: Android APK (via EAS Build)
+    max_build_duration: 60
+    environment:
+      node: 20.9.0
+      vars:
+        EXPO_TOKEN: $EXPO_TOKEN
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Instalar EAS CLI
+        script: npm install -g eas-cli@latest
+
+      - name: Instalar dependencias
+        script: npm install
+
+      - name: Build APK via EAS e baixar
+        script: |
+          eas build \
+            --platform android \
+            --profile preview \
+            --non-interactive \
+            2>&1 | tee /tmp/eas_build.log
+
+          APK_URL=$(grep -oE 'https://[^ ]+\.apk' /tmp/eas_build.log | tail -1)
+
+          if [ -z "$APK_URL" ]; then
+            echo "Buscando URL via eas build:list..."
+            APK_URL=$(eas build:list \
+              --platform android \
+              --limit 1 \
+              --json \
+              --non-interactive \
+              2>/dev/null \
+              | node -e "
+                const d=require('fs').readFileSync('/dev/stdin','utf8').trim();
+                try { const a=JSON.parse(d); console.log(a[0]?.artifacts?.buildUrl||a[0]?.artifacts?.applicationArchiveUrl||''); }
+                catch(e){ console.log(''); }
+              ")
+          fi
+
+          echo "URL do APK: $APK_URL"
+          if [ -n "$APK_URL" ] && [ "$APK_URL" != "null" ]; then
+            curl -L --retry 3 "$APK_URL" -o meta-moto.apk
+            ls -lh meta-moto.apk
+          else
+            echo "AVISO: APK sera baixado manualmente em expo.dev"
+          fi
+
+    artifacts:
+      - meta-moto.apk
+      - /tmp/eas_build.log
+
+  # ─────────────────────────────────────────────────────────────
+  # Opção 2: Build local no Codemagic (sem EAS, sem conta Expo)
+  # Gera APK diretamente na maquina do Codemagic com Gradle
+  # ─────────────────────────────────────────────────────────────
+  android-local:
+    name: Android APK (build local, sem EAS)
+    max_build_duration: 90
+    environment:
+      node: 20.9.0
+      java: 17
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'v*'
+          include: true
+    scripts:
+      - name: Instalar dependencias
+        script: npm install
+
+      - name: Expo Prebuild (gerar pasta android)
+        script: npx expo prebuild --platform android --clean --no-install
+
+      - name: Build APK com Gradle
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            -x lint \
+            --no-daemon \
+            --stacktrace
+
+    artifacts:
+      - android/app/build/outputs/apk/**/*.apk
+      - android/app/build/outputs/apk/**/*.aab
