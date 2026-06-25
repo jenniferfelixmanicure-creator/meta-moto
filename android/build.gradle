@@ -23,11 +23,19 @@ subprojects {
     project.evaluationDependsOn(":app")
 
     // Força o namespace para plugins antigos que não o possuem
-    afterEvaluate { project ->
-        if (project.hasProperty("android")) {
-            if (project.android.namespace == null) {
-                project.android.namespace = project.group
-            }
+    if (project.state.executed) {
+        configureNamespace(project)
+    } else {
+        project.afterEvaluate {
+            configureNamespace(project)
+        }
+    }
+}
+
+def configureNamespace(project) {
+    if (project.hasProperty("android")) {
+        if (project.android.namespace == null) {
+            project.android.namespace = project.group
         }
     }
 }
