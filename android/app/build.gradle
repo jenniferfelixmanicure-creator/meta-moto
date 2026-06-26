@@ -13,6 +13,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     // namespace movido para manifest para compatibilidade com Gradle 7.4.2
+    namespace 'com.metamoto.meta_moto'
     compileSdk 34
     ndkVersion flutter.ndkVersion
 
