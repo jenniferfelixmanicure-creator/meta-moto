@@ -4,22 +4,22 @@ import 'package:google_fonts/google_fonts.dart';
 /// Paleta baseada na logo: preto profundo + vermelho sangue + prata/branco
 class AppColors {
   // Backgrounds
-  static const Color background   = Color(0xFF0A0A0A); // preto quase puro
-  static const Color surface      = Color(0xFF141414); // preto levemente elevado
-  static const Color cardBg       = Color(0xFF1A1A1A); // card
-  static const Color surfaceLight = Color(0xFF222222); // input / divisor
+  static const Color background   = Color(0xFF0A0A0A);
+  static const Color surface      = Color(0xFF141414);
+  static const Color cardBg       = Color(0xFF1A1A1A);
+  static const Color surfaceLight = Color(0xFF222222);
 
   // Primária — vermelho da logo
-  static const Color primary      = Color(0xFFD10000); // vermelho principal
-  static const Color primaryDark  = Color(0xFF9A0000); // vermelho escuro (hover/press)
-  static const Color primaryLight = Color(0xFFFF2222); // vermelho claro (glow)
-  static const Color primaryGlow  = Color(0x44D10000); // brilho vermelho
+  static const Color primary      = Color(0xFFD10000);
+  static const Color primaryDark  = Color(0xFF9A0000);
+  static const Color primaryLight = Color(0xFFFF2222);
+  static const Color primaryGlow  = Color(0x44D10000);
 
   // Acentos
-  static const Color silver       = Color(0xFFD4D4D4); // prata da logo (olhos)
-  static const Color silverDim    = Color(0xFF888888); // prata escuro
-  static const Color accent       = Color(0xFFD10000); // vermelho de destaque
+  static const Color silver       = Color(0xFFD4D4D4);
+  static const Color silverDim    = Color(0xFF888888);
   static const Color white        = Color(0xFFFFFFFF);
+  static const Color accent       = Color(0xFF7B61FF); // roxo/violeta para meta mensal
 
   // Textos
   static const Color textPrimary   = Color(0xFFFFFFFF);
@@ -197,16 +197,14 @@ class AppTheme {
   }
 }
 
-/// Componentes visuais reutilizáveis com o estilo da logo
+/// Componentes visuais reutilizáveis
 class AppDecorations {
-  /// Card com borda vermelha sutil e fundo escuro
   static BoxDecoration redCard({double radius = 16}) => BoxDecoration(
     color: AppColors.cardBg,
     borderRadius: BorderRadius.circular(radius),
     border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 1),
   );
 
-  /// Card com gradiente vermelho-preto (usado em destaques)
   static BoxDecoration heroCard({double radius = 20}) => BoxDecoration(
     gradient: const LinearGradient(
       begin: Alignment.topLeft,
@@ -225,7 +223,6 @@ class AppDecorations {
     ],
   );
 
-  /// Gradiente de fundo para o app bar / splash
   static const LinearGradient headerGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
