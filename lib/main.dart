@@ -8,7 +8,6 @@ import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 import 'widgets/overlay_bubble.dart';
 
-/// Entry point principal do app.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('pt_BR');
@@ -22,7 +21,7 @@ void main() async {
   runApp(const MetaMotoApp());
 }
 
-/// Entry point SEPARADO para o overlay flutuante.
+/// Entry-point SEPARADO para o overlay flutuante.
 /// Roda num FlutterEngine isolado — não compartilha estado com o app principal.
 @pragma('vm:entry-point')
 void overlayMain() {
