@@ -71,9 +71,7 @@
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService"/>
             </intent-filter>
-            <meta-data
-                android:name="android.service.notification.default_filter_types"
-                android:value="conversations|alerting"/>
+            <!-- Sem filtro de tipo: captura TODAS as notificações dos apps de corrida -->
         </service>
 
         <!-- ═══ OverlayService — flutter_overlay_window ═════════════════════

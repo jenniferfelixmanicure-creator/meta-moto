@@ -5,16 +5,10 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 
 /**
- * Lê notificações dos apps de transporte/entrega.
- * Detecta OFERTAS de corrida (antes de aceitar) para exibir o overlay
- * com R$/km, R$/hora e valor — igual ao JetMax.
+ * Lê notificações dos apps de corrida e exibe o overlay antes de aceitar.
  *
- * Apps suportados:
- *   Uber Driver   → com.ubercab.driver
- *   99 Motorista  → com.taxis99.driver / com.taxis99
- *   iFood Courier → com.ifood.courier / br.com.ifood
- *   Lalamove      → com.lalamove.android
- *   InDrive       → sinet.startup.inDriver
+ * Estratégia: SEM filtro de keywords — qualquer notificação dos pacotes
+ * suportados com valor em R$ dispara o overlay. Logs detalhados para debug.
  */
 class RideNotificationService : NotificationListenerService() {
 
@@ -29,89 +23,63 @@ class RideNotificationService : NotificationListenerService() {
             "com.ifood.courier"      to "iFood",
             "br.com.ifood"           to "iFood",
             "com.lalamove.android"   to "Lalamove",
-            "sinet.startup.inDriver" to "InDrive"
+            "sinet.startup.inDriver" to "InDrive",
         )
 
-        // ── Palavras-chave de OFERTA de corrida (antes de aceitar) ────────────
-        private val OFFER_KEYWORDS = listOf(
-            // Uber Driver (pt-BR)
-            "nova corrida", "novo pedido", "nova solicitação", "nova viagem",
-            "corrida disponível", "pedido disponível", "aceitar corrida",
-            // Uber Driver (en)
-            "new trip", "trip request", "new request", "incoming trip",
-            // 99
-            "nova chamada", "corrida perto", "chamada próxima",
-            // iFood
-            "novo pedido", "pedido próximo",
-            // Genérico
-            "aceitar", "accept", "novo", "new"
+        // Notificações que claramente NÃO são ofertas — só as mais óbvias
+        private val SKIP_KEYWORDS = listOf(
+            "avalie sua viagem", "rate your trip", "avalie o motorista",
+            "sua avaliação", "viagem avaliada", "promoção", "desconto",
+            "cashback", "indique um amigo", "refer a friend",
         )
 
-        // ── Palavras que NÃO são ofertas (ignorar) ────────────────────────────
-        private val IGNORE_KEYWORDS = listOf(
-            "conclu", "finaliz", "entregue", "cancelad", "cancel",
-            "avalia", "rating", "chegou", "chegando", "a caminho",
-            "on the way", "arriving"
-        )
-
-        // R$ 12,02 | R$12.50 | + R$ 18,75
+        // R$ 12,02 | R$12.50 | +R$ 18,75
         private val MONEY_REGEX = Regex(
-            """(?:\+\s*)?R\$\s*(\d{1,4}(?:[.,]\d{3})*[.,]\d{2})""",
+            """R\$\s*(\d{1,4}[.,]\d{2})""",
             setOf(RegexOption.IGNORE_CASE)
         )
 
-        // 3,2 km | 3.2km | 12 km
+        // 3,2 km | 3.2km | 12 km | 0.8 km
         private val KM_REGEX = Regex(
-            """(\d{1,3}[.,]\d{1,2}|\d{1,3})\s*km""",
+            """(\d{1,3}[.,]?\d{0,2})\s*km""",
             setOf(RegexOption.IGNORE_CASE)
         )
 
-        // "10 min" | "15 mins" | "5 minutos"
+        // 10 min | 15 mins | 5 minutos
         private val MIN_REGEX = Regex(
-            """(\d{1,3})\s*min(?:s|utos?)?""",
-            setOf(RegexOption.IGNORE_CASE)
-        )
-
-        // R$/km já calculado pelo app: "3,08/km" ou "3.08/km"
-        private val RPM_REGEX = Regex(
-            """(\d{1,3}[.,]\d{2})\s*/\s*km""",
-            setOf(RegexOption.IGNORE_CASE)
-        )
-
-        // Nota/rating: "4,97" ou "★ 4.97"
-        private val NOTA_REGEX = Regex(
-            """[★*]?\s*([4-5][.,]\d{2})""",
+            """(\d{1,3})\s*min""",
             setOf(RegexOption.IGNORE_CASE)
         )
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         sbn ?: return
-        val pkg = sbn.packageName ?: return
+        val pkg      = sbn.packageName ?: return
         val platform = SUPPORTED_PACKAGES[pkg] ?: return
 
-        val notification = sbn.notification ?: return
-        val extras = notification.extras ?: return
-
-        val title   = extras.getCharSequence("android.title")?.toString() ?: ""
-        val text    = extras.getCharSequence("android.text")?.toString() ?: ""
+        val extras  = sbn.notification?.extras ?: return
+        val title   = extras.getCharSequence("android.title")?.toString()  ?: ""
+        val text    = extras.getCharSequence("android.text")?.toString()   ?: ""
         val bigText = extras.getCharSequence("android.bigText")?.toString() ?: ""
         val subText = extras.getCharSequence("android.subText")?.toString() ?: ""
 
-        val fullText = "$title $text $bigText $subText"
+        val fullText  = "$title $text $bigText $subText".trim()
         val fullLower = fullText.lowercase()
 
-        // Ignora notificações que não são ofertas
-        if (IGNORE_KEYWORDS.any { fullLower.contains(it) }) return
+        // ── Log TUDO que vem do Uber/99 (para debug com adb logcat) ──────────
+        Log.d(TAG, "[$platform] pkg=$pkg")
+        Log.d(TAG, "  title   : $title")
+        Log.d(TAG, "  text    : $text")
+        Log.d(TAG, "  bigText : $bigText")
+        Log.d(TAG, "  subText : $subText")
 
-        // Precisa ter pelo menos uma palavra-chave de oferta
-        val isOffer = OFFER_KEYWORDS.any { fullLower.contains(it) }
-        // Ou ter valor monetário no texto (Uber às vezes não tem palavra-chave clara)
-        val hasMoney = MONEY_REGEX.containsMatchIn(fullText)
+        // Pula notificações claramente fora do escopo (avaliações, promoções)
+        if (SKIP_KEYWORDS.any { fullLower.contains(it) }) {
+            Log.d(TAG, "  → IGNORADO (skip keyword)")
+            return
+        }
 
-        if (!isOffer && !hasMoney) return
-
-        // ── Extrai valor ──────────────────────────────────────────────────────
+        // ── Extrai valor monetário ────────────────────────────────────────────
         val moneyMatch = MONEY_REGEX.find(fullText)
         val valor = moneyMatch?.groupValues?.get(1)
             ?.replace(".", "")
@@ -119,50 +87,34 @@ class RideNotificationService : NotificationListenerService() {
             ?.toDoubleOrNull()
 
         if (valor == null || valor < 1.0) {
-            Log.d(TAG, "[$platform] Oferta sem valor válido: ${fullText.take(100)}")
+            Log.d(TAG, "  → IGNORADO (sem valor R$)")
             return
         }
 
-        // ── Extrai distância da VIAGEM (km) ───────────────────────────────────
-        // Pode haver 2 ocorrências de km: "0.8 km para busca · 3.1 km de viagem"
-        // Pega o MAIOR valor (distância da viagem, não da busca)
-        val kmMatches = KM_REGEX.findAll(fullText).toList()
-        val distKm = kmMatches
+        // ── Extrai todos os valores de km (pega o maior = distância da viagem) ─
+        val distKm = KM_REGEX.findAll(fullText)
             .mapNotNull { it.groupValues[1].replace(",", ".").toDoubleOrNull() }
+            .filter { it > 0 }
             .maxOrNull()
 
-        // ── Extrai tempo estimado (min) ───────────────────────────────────────
-        val minMatches = MIN_REGEX.findAll(fullText).toList()
-        val tempMin = minMatches
+        // ── Extrai tempo em minutos (pega o maior) ────────────────────────────
+        val tempMin = MIN_REGEX.findAll(fullText)
             .mapNotNull { it.groupValues[1].toIntOrNull() }
+            .filter { it in 1..120 }
             .maxOrNull()
 
-        // ── R$/km (já calculado pelo app, se disponível) ──────────────────────
-        val rpmMatch = RPM_REGEX.find(fullText)
-        val rpmPronto = rpmMatch?.groupValues?.get(1)
-            ?.replace(",", ".")
-            ?.toDoubleOrNull()
+        // ── Calcula R$/km ─────────────────────────────────────────────────────
+        val eficiencia = if (distKm != null && distKm > 0) valor / distKm else null
 
-        // ── Nota do motorista ─────────────────────────────────────────────────
-        val notaMatch = NOTA_REGEX.find(fullText)
-        val nota = notaMatch?.groupValues?.get(1)
-            ?.replace(",", ".")
-            ?.toDoubleOrNull()
-
-        // ── Calcula R$/km se não veio pronto ─────────────────────────────────
-        val eficiencia = rpmPronto
-            ?: if (distKm != null && distKm > 0) valor / distKm else null
-
-        // ── Calcula R$/hora (R$/km × média de velocidade, ou por tempo) ───────
-        // Se temos valor e tempo em minutos, calculamos diretamente
+        // ── Calcula R$/hora ───────────────────────────────────────────────────
         val ganhoHora = when {
             tempMin != null && tempMin > 0 -> (valor / tempMin) * 60.0
-            eficiencia != null -> eficiencia * 25.0 // ~25 km/h média urbana
-            else -> null
+            eficiencia != null             -> eficiencia * 25.0  // ~25 km/h urbano
+            else                           -> null
         }
 
-        Log.i(TAG, "[$platform] OFERTA → R\$ $valor | ${distKm ?: "?"}km | " +
-            "${tempMin ?: "?"}min | R\$/km: ${eficiencia ?: "?"} | R\$/h: ${ganhoHora ?: "?"}")
+        Log.i(TAG, "  → OFERTA DETECTADA: R\$ $valor | km=$distKm | " +
+            "min=$tempMin | R\$/km=$eficiencia | R\$/h=$ganhoHora")
 
         RideEventStreamHandler.sendOffer(
             platform   = platform,
@@ -171,7 +123,7 @@ class RideNotificationService : NotificationListenerService() {
             tempMin    = tempMin,
             eficiencia = eficiencia,
             ganhoHora  = ganhoHora,
-            nota       = nota,
+            nota       = null,
         )
     }
 
@@ -179,11 +131,11 @@ class RideNotificationService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        Log.i(TAG, "NotificationListenerService conectado ✓")
+        Log.i(TAG, "✓ NotificationListenerService conectado")
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
-        Log.w(TAG, "NotificationListenerService desconectado")
+        Log.w(TAG, "✗ NotificationListenerService desconectado")
     }
 }
