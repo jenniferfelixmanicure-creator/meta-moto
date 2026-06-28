@@ -7,7 +7,6 @@ import '../theme/app_theme.dart';
 import '../widgets/shift_widget.dart';
 import '../widgets/earnings_card.dart';
 import '../widgets/ride_tile.dart';
-import '../models/ride.dart';
 import 'add_ride_screen.dart';
 import 'maintenance_screen.dart';
 import 'notification_setup_screen.dart';
@@ -486,7 +485,6 @@ class _LucroCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
     final positivo = lucro >= 0;
     return Container(
       padding: const EdgeInsets.all(16),
