@@ -140,17 +140,17 @@ jobs:
         run: |
           # Substitui flutter.compileSdkVersion / targetSdk / minSdk em TODOS os
           # plugins do pub-cache (geolocator_android, printing, etc.)
-          find ~/.pub-cache -name "build.gradle" -path "*pub.dev*" | while read f; do
+          # Usa -e separado para evitar problemas com newline no YAML
+          COUNT=0
+          while IFS= read -r f; do
             sed -i \
-              's/flutter\.compileSdkVersion/34/g;
-               s/flutter\.targetSdkVersion/34/g;
-               s/flutter\.minSdkVersion/26/g' "$f"
-          done
-          echo "✅ flutter.* references patched in all pub-cache plugins"
-          # Confirma que geolocator_android foi corrigido
-          find ~/.pub-cache -name "build.gradle" -path "*geolocator_android*" \
-            -exec echo "→ {}" \; \
-            -exec grep -c "flutter\." {} \; 2>/dev/null || true
+              -e 's/flutter\.compileSdkVersion/34/g' \
+              -e 's/flutter\.targetSdkVersion/34/g' \
+              -e 's/flutter\.minSdkVersion/26/g' \
+              "$f"
+            COUNT=$((COUNT + 1))
+          done < <(find ~/.pub-cache -name "build.gradle" -path "*pub.dev*" 2>/dev/null)
+          echo "✅ Patched $COUNT build.gradle files in pub-cache"
 
       # ── 8. Versão dinâmica (workflow_dispatch com versão manual) ─────────────
       - name: Definir versão do app
