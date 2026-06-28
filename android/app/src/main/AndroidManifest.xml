@@ -74,6 +74,23 @@
             <!-- Sem filtro de tipo: captura TODAS as notificações dos apps de corrida -->
         </service>
 
+        <!-- ═══ AccessibilityService — lê a tela do Uber/99 em tempo real ═══
+             Detecta ofertas de corrida ANTES de aceitar (app em primeiro plano).
+             Usuário precisa ativar em: Configs → Acessibilidade → Meta Moto.
+             ════════════════════════════════════════════════════════════════ -->
+        <service
+            android:name=".TripAccessibilityService"
+            android:label="Meta Moto — Leitura de Corridas"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config"/>
+        </service>
+
         <!-- ═══ OverlayService — flutter_overlay_window ═════════════════════
              Roda o overlayMain() entry-point num FlutterEngine isolado.
              Exibe a bolinha flutuante sobre qualquer app.

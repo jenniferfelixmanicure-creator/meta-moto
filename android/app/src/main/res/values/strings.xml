@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">Meta Moto</string>
     <string name="widget_description">Mostra o ganho do dia e o progresso da sua meta financeira.</string>
+    <string name="accessibility_description">Lê a tela do Uber e 99 quando chega uma oferta de corrida e exibe o painel com R$/km, R$/hora e valor para você decidir se aceita — sem tocar no celular.</string>
 </resources>

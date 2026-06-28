@@ -16,6 +16,7 @@ class NotificationSetupScreen extends StatefulWidget {
 class _NotificationSetupScreenState extends State<NotificationSetupScreen> {
   bool _hasNotifPerm = false;
   bool _hasOverlayPerm = false;
+  bool _hasA11yPerm = false;
   bool _checking = false;
 
   @override
@@ -27,12 +28,16 @@ class _NotificationSetupScreenState extends State<NotificationSetupScreen> {
   Future<void> _check() async {
     setState(() => _checking = true);
     final prov = context.read<AppProvider>();
-    final notif = await prov.checkNotificationPermission();
-    final overlay = await prov.checkOverlayPermission();
+    final results = await Future.wait([
+      prov.checkNotificationPermission(),
+      prov.checkOverlayPermission(),
+      prov.checkAccessibilityPermission(),
+    ]);
     if (mounted) {
       setState(() {
-        _hasNotifPerm = notif;
-        _hasOverlayPerm = overlay;
+        _hasNotifPerm   = results[0];
+        _hasOverlayPerm = results[1];
+        _hasA11yPerm    = results[2];
         _checking = false;
       });
     }
@@ -88,6 +93,46 @@ class _NotificationSetupScreenState extends State<NotificationSetupScreen> {
                 await _check();
               },
             ),
+
+            const SizedBox(height: 12),
+
+            // ── Status: Acessibilidade (lê tela do Uber/99) ───────────────
+            _PermissionCard(
+              title: 'Leitura de Tela (Uber/99)',
+              subtitle: _hasA11yPerm
+                  ? 'Ativo — detecta oferta quando Uber está aberto'
+                  : 'PRINCIPAL: exibe overlay antes de aceitar a corrida',
+              icon: Icons.visibility_rounded,
+              active: _hasA11yPerm,
+              checking: _checking,
+              highlight: !_hasA11yPerm,
+              onActivate: () async {
+                await prov.openAccessibilitySettings();
+                await Future.delayed(const Duration(seconds: 3));
+                await _check();
+              },
+            ),
+
+            if (!_hasA11yPerm)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+                child: Row(
+                  children: const [
+                    Icon(Icons.info_outline_rounded,
+                        color: Color(0xFFFFD600), size: 14),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Na tela de Acessibilidade, encontre "Meta Moto" e ative.',
+                        style: TextStyle(
+                            color: Color(0xFFFFD600),
+                            fontSize: 12,
+                            height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
             const SizedBox(height: 24),
 
@@ -336,6 +381,7 @@ class _PermissionCard extends StatelessWidget {
   final IconData icon;
   final bool active;
   final bool checking;
+  final bool highlight;
   final VoidCallback onActivate;
 
   const _PermissionCard({
@@ -345,6 +391,7 @@ class _PermissionCard extends StatelessWidget {
     required this.active,
     required this.checking,
     required this.onActivate,
+    this.highlight = false,
   });
 
   @override

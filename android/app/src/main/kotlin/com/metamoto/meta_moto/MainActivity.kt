@@ -1,10 +1,11 @@
 package com.metamoto.meta_moto
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-// import com.google.gson.Gson (removido para resolver erro de compilação)
+import android.view.accessibility.AccessibilityManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -51,6 +52,14 @@ class MainActivity : FlutterActivity() {
                         }
                     }
 
+                    "isAccessibilityEnabled" ->
+                        result.success(isAccessibilityEnabled())
+
+                    "openAccessibilitySettings" -> {
+                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        result.success(null)
+                    }
+
                     else -> result.notImplemented()
                 }
             }
@@ -71,6 +80,12 @@ class MainActivity : FlutterActivity() {
 
     private fun hasOverlayPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+
+    private fun isAccessibilityEnabled(): Boolean {
+        val am = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+        val enabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        return enabled.any { it.resolveInfo.serviceInfo.packageName == packageName }
+    }
 
     private fun requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

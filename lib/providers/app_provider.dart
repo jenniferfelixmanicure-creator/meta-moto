@@ -427,6 +427,20 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> checkAccessibilityPermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('isAccessibilityEnabled') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> openAccessibilitySettings() async {
+    try {
+      await _channel.invokeMethod('openAccessibilitySettings');
+    } catch (_) {}
+  }
+
   void startListeningNotifications() {
     _notificationSub?.cancel();
     _notificationSub = _eventChannel
