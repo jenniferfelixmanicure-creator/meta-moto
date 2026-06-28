@@ -12,6 +12,18 @@ rootProject.buildDir = "../build"
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
     project.evaluationDependsOn(":app")
+
+    // Force compileSdk = 34 on every Android library plugin.
+    // Fixes: geolocator_android, printing, and others that use
+    // flutter.compileSdkVersion (unavailable in sub-project context)
+    // or hardcode a value < 31 (missing android:attr/lStar, etc.).
+    afterEvaluate {
+        if (it.plugins.hasPlugin("com.android.library")) {
+            it.android {
+                compileSdkVersion 34
+            }
+        }
+    }
 }
 
 tasks.register("clean", Delete) {

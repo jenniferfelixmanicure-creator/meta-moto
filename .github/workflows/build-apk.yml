@@ -135,26 +135,22 @@ jobs:
             -exec sed -i '/android\.enableR8/d' {} \; 2>/dev/null || true
           echo "✅ Fix enableR8 aplicado"
 
-      # ── 7b. Fix: geolocator_android flutter.compileSdkVersion ────────────────
-      - name: Fix geolocator_android compileSdkVersion
+      # ── 7b. Fix: compileSdkVersion em plugins do pub-cache ───────────────────
+      - name: Fix compileSdkVersion em plugins do pub-cache
         run: |
-          # geolocator_android ≤ 4.6.x usa flutter.compileSdkVersion no build.gradle
-          # do subprojeto, onde a extensão 'flutter' não existe — substitui por 34
+          # Substitui flutter.compileSdkVersion / targetSdk / minSdk em TODOS os
+          # plugins do pub-cache (geolocator_android, printing, etc.)
+          find ~/.pub-cache -name "build.gradle" -path "*pub.dev*" | while read f; do
+            sed -i \
+              's/flutter\.compileSdkVersion/34/g;
+               s/flutter\.targetSdkVersion/34/g;
+               s/flutter\.minSdkVersion/26/g' "$f"
+          done
+          echo "✅ flutter.* references patched in all pub-cache plugins"
+          # Confirma que geolocator_android foi corrigido
           find ~/.pub-cache -name "build.gradle" -path "*geolocator_android*" \
-            -print0 | xargs -0 -I{} sh -c '
-              sed -i \
-                "s/flutter\.compileSdkVersion/34/g;
-                 s/flutter\.targetSdkVersion/34/g;
-                 s/flutter\.minSdkVersion/23/g" {}
-              echo "✅ Patched: {}"
-            ' 2>/dev/null || true
-          # Aplica o mesmo fix em qualquer outro plugin com o mesmo problema
-          find ~/.pub-cache -name "build.gradle" -path "*pub.dev*" \
-            -exec grep -l "flutter\.compileSdkVersion" {} \; 2>/dev/null \
-            | xargs -I{} sh -c '
-              sed -i "s/flutter\.compileSdkVersion/34/g" {}
-              echo "✅ Extra patched: {}"
-            ' 2>/dev/null || true
+            -exec echo "→ {}" \; \
+            -exec grep -c "flutter\." {} \; 2>/dev/null || true
 
       # ── 8. Versão dinâmica (workflow_dispatch com versão manual) ─────────────
       - name: Definir versão do app
