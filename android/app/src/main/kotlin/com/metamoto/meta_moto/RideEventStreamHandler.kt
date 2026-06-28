@@ -4,7 +4,7 @@ import io.flutter.plugin.common.EventChannel
 
 /**
  * Singleton que mantém o sink do EventChannel ativo.
- * O RideNotificationService chama [sendRide] para enviar corridas ao Flutter.
+ * Envia ofertas de corrida ao Flutter para exibição no overlay.
  */
 object RideEventStreamHandler : EventChannel.StreamHandler {
 
@@ -19,15 +19,38 @@ object RideEventStreamHandler : EventChannel.StreamHandler {
     }
 
     /**
-     * Envia corrida detectada para o Flutter.
-     * @param platform  Nome da plataforma ("Uber", "99", "iFood" etc.)
-     * @param value     Valor em R$
-     * @param distKm    Distância em km (pode ser null se não encontrado)
+     * Envia oferta de corrida detectada para o Flutter.
+     * O overlay mostrará R$/km, R$/hora e valor antes do motorista aceitar.
      */
+    fun sendOffer(
+        platform:   String,
+        valor:      Double,
+        distKm:     Double? = null,
+        tempMin:    Int?    = null,
+        eficiencia: Double? = null,
+        ganhoHora:  Double? = null,
+        nota:       Double? = null,
+    ) {
+        val map = mutableMapOf<String, Any>(
+            "platform" to platform,
+            "value"    to valor,
+            "tipo"     to "oferta",
+        )
+        distKm?.let    { map["dist_km"]    = it }
+        tempMin?.let   { map["temp_min"]   = it }
+        eficiencia?.let { map["eficiencia"] = it }
+        ganhoHora?.let { map["ganho_hora"] = it }
+        nota?.let      { map["nota"]       = it }
+
+        eventSink?.success(map)
+    }
+
+    /** Mantém compatibilidade com o código legado de corridas concluídas. */
     fun sendRide(platform: String, value: Double, distKm: Double? = null) {
         val map = mutableMapOf<String, Any>(
             "platform" to platform,
-            "value"    to value
+            "value"    to value,
+            "tipo"     to "conclusao",
         )
         distKm?.let { map["dist_km"] = it }
         eventSink?.success(map)

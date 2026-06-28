@@ -443,28 +443,49 @@ class AppProvider extends ChangeNotifier {
     if (event is! Map) return;
 
     final plataforma = event['platform'] as String?;
-    final valor = (event['value'] as num?)?.toDouble();
-    final distKm = (event['dist_km'] as num?)?.toDouble();
+    final valor      = (event['value'] as num?)?.toDouble();
+    final tipo       = event['tipo'] as String? ?? 'conclusao';
+    final distKm     = (event['dist_km'] as num?)?.toDouble();
+    final tempMin    = (event['temp_min'] as num?)?.toInt();
+    final ganhoHora  = (event['ganho_hora'] as num?)?.toDouble();
+    final nota       = (event['nota'] as num?)?.toDouble();
 
     if (plataforma == null || valor == null || valor <= 0) return;
 
-    // Calcula eficiência
     final eficiencia = calcularEficiencia(valor, distKm);
-    final baixa = isBaixaEficiencia(eficiencia);
+    final baixa      = isBaixaEficiencia(eficiencia);
 
     // Registra no histórico de detecções
-    final detected = DetectedRide(
-      plataforma: plataforma,
-      valor: valor,
-      distKm: distKm,
-      eficiencia: eficiencia,
-      baixaEficiencia: baixa,
-      horario: DateTime.now(),
+    _detectedRides.insert(
+      0,
+      DetectedRide(
+        plataforma: plataforma,
+        valor: valor,
+        distKm: distKm,
+        eficiencia: eficiencia,
+        baixaEficiencia: baixa,
+        horario: DateTime.now(),
+      ),
     );
-    _detectedRides.insert(0, detected);
     if (_detectedRides.length > 30) _detectedRides.removeLast();
 
-    // Salva a corrida no banco
+    // ── OFERTA: só mostra o overlay, NÃO salva no banco ──────────────────────
+    if (tipo == 'oferta') {
+      await _overlay.mostrarOferta(
+        plataforma: plataforma,
+        valor: valor,
+        distKm: distKm,
+        tempMin: tempMin,
+        eficiencia: eficiencia,
+        ganhoHora: ganhoHora,
+        nota: nota,
+        limiteEficiencia: _limiteEficiencia,
+      );
+      notifyListeners();
+      return;
+    }
+
+    // ── CONCLUSÃO: salva no banco e mostra overlay ────────────────────────────
     final ride = Ride(
       valor: valor,
       plataforma: plataforma,
@@ -475,19 +496,20 @@ class AppProvider extends ChangeNotifier {
     );
     await addRide(ride);
 
-    // Log para a lista de recentes
     final efStr = eficiencia != null
         ? ' | R\$ ${eficiencia.toStringAsFixed(2)}/km'
         : '';
     final kmStr = distKm != null ? ' | ${distKm.toStringAsFixed(1)} km' : '';
-    _recentAutoRides.insert(0, '$plataforma: R\$ ${valor.toStringAsFixed(2)}$kmStr$efStr');
+    _recentAutoRides.insert(
+        0, '$plataforma: R\$ ${valor.toStringAsFixed(2)}$kmStr$efStr');
     if (_recentAutoRides.length > 20) _recentAutoRides.removeLast();
 
-    // Mostra overlay flutuante
-    await _overlay.mostrarCorridaDetectada(
+    await _overlay.mostrarOferta(
       plataforma: plataforma,
       valor: valor,
       distKm: distKm,
+      eficiencia: eficiencia,
+      ganhoHora: ganhoHora,
       limiteEficiencia: _limiteEficiencia,
     );
 

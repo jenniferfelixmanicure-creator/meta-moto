@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../theme/app_theme.dart';
 
-/// Widget exibido DENTRO do overlay flutuante.
-/// Este widget roda num FlutterEngine separado (entry-point overlayMain).
+/// Painel de leitura de corrida — aparece sobre o Uber/99 quando chega
+/// uma oferta, mostrando R$/km · R$/hora · Valor · Distância · Tempo.
+/// Inspirado no JetMax.
 class OverlayBubble extends StatefulWidget {
   const OverlayBubble({super.key});
 
@@ -11,278 +12,302 @@ class OverlayBubble extends StatefulWidget {
   State<OverlayBubble> createState() => _OverlayBubbleState();
 }
 
-class _OverlayBubbleState extends State<OverlayBubble>
-    with SingleTickerProviderStateMixin {
+class _OverlayBubbleState extends State<OverlayBubble> {
   String _plataforma = '';
   double _valor = 0;
   double? _distKm;
-  double? _eficiencia;
+  int? _tempMin;
+  double? _eficiencia;   // R$/km
+  double? _ganhoHora;    // R$/hora
+  double? _nota;
   bool _baixaEficiencia = false;
-  bool _expandido = true;
-  late AnimationController _pulse;
-  late Animation<double> _pulseAnim;
+  bool _mini = false;    // modo bolinha
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 700))
-      ..repeat(reverse: true);
-    _pulseAnim = Tween(begin: 0.9, end: 1.05).animate(
-        CurvedAnimation(parent: _pulse, curve: Curves.easeInOut));
-
-    // Escuta dados enviados pelo app principal
     FlutterOverlayWindow.overlayListener.listen((data) {
       if (data is Map) {
         setState(() {
-          _plataforma = data['plataforma'] as String? ?? '';
-          _valor = (data['valor'] as num?)?.toDouble() ?? 0;
-          _distKm = (data['dist_km'] as num?)?.toDouble();
-          _eficiencia = (data['eficiencia'] as num?)?.toDouble();
+          _plataforma     = data['plataforma'] as String? ?? '';
+          _valor          = (data['valor'] as num?)?.toDouble() ?? 0;
+          _distKm         = (data['dist_km'] as num?)?.toDouble();
+          _tempMin        = (data['temp_min'] as num?)?.toInt();
+          _eficiencia     = (data['eficiencia'] as num?)?.toDouble();
+          _ganhoHora      = (data['ganho_hora'] as num?)?.toDouble();
+          _nota           = (data['nota'] as num?)?.toDouble();
           _baixaEficiencia = data['baixa_eficiencia'] as bool? ?? false;
-          _expandido = true;
+          _mini = false; // sempre expande quando chega nova oferta
         });
       }
     });
   }
 
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
+  // ── helpers ────────────────────────────────────────────────────────────────
+
+  String _fmt(double? v, {int dec = 2}) =>
+      v != null ? v.toStringAsFixed(dec).replaceAll('.', ',') : '--';
+
+  /// Verde se bom, amarelo se médio, vermelho se ruim
+  Color _corEficiencia(double? v) {
+    if (v == null) return Colors.white54;
+    if (v >= 3.0) return const Color(0xFF00E676);   // verde
+    if (v >= 2.0) return const Color(0xFFFFD600);   // amarelo
+    return const Color(0xFFFF5252);                 // vermelho
   }
+
+  Color _corHora(double? v) {
+    if (v == null) return Colors.white54;
+    if (v >= 40) return const Color(0xFF00E676);
+    if (v >= 25) return const Color(0xFFFFD600);
+    return const Color(0xFFFF5252);
+  }
+
+  Color _corNota(double? v) {
+    if (v == null) return Colors.white54;
+    if (v >= 4.8) return const Color(0xFF00E676);
+    if (v >= 4.5) return const Color(0xFFFFD600);
+    return const Color(0xFFFF5252);
+  }
+
+  // ── build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final valorStr =
-        'R\$ ${_valor.toStringAsFixed(2).replaceAll('.', ',')}';
-    final efStr = _eficiencia != null
-        ? 'R\$ ${_eficiencia!.toStringAsFixed(2).replaceAll('.', ',')}/km'
-        : null;
+    if (_mini) return _buildMini();
+    return _buildPainel();
+  }
 
-    if (!_expandido) {
-      // Modo mini — só bolinha vermelha
-      return GestureDetector(
-        onTap: () => setState(() => _expandido = true),
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppColors.primary,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                  color: AppColors.primary.withOpacity(0.5),
-                  blurRadius: 12,
-                  spreadRadius: 2)
-            ],
-          ),
-          child: const Icon(Icons.moped_rounded, color: Colors.white, size: 22),
+  // Bolinha reduzida
+  Widget _buildMini() {
+    return GestureDetector(
+      onTap: () => setState(() => _mini = false),
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+                color: AppColors.primary.withOpacity(0.6),
+                blurRadius: 14,
+                spreadRadius: 2),
+          ],
         ),
-      );
-    }
+        child: const Icon(Icons.moped_rounded, color: Colors.white, size: 22),
+      ),
+    );
+  }
+
+  // Painel completo estilo JetMax / Uber driver
+  Widget _buildPainel() {
+    final borderColor = _baixaEficiencia
+        ? const Color(0xFFFFD600)
+        : const Color(0xFF00C853);
 
     return Material(
       color: Colors.transparent,
-      child: GestureDetector(
-        onTap: () {},
-        child: AnimatedBuilder(
-          animation: _baixaEficiencia ? _pulseAnim : const AlwaysStoppedAnimation(1.0),
-          builder: (_, child) => Transform.scale(
-            scale: _baixaEficiencia ? _pulseAnim.value : 1.0,
-            child: child,
-          ),
-          child: Container(
-            width: 290,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF111111),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: _baixaEficiencia
-                    ? AppColors.warning
-                    : AppColors.primary.withOpacity(0.5),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: (_baixaEficiencia ? AppColors.warning : AppColors.primary)
-                      .withOpacity(0.3),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
+      child: Container(
+        width: 330,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0D0D0D),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: borderColor.withOpacity(0.35),
+              blurRadius: 20,
+              spreadRadius: 2,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  children: [
-                    const Icon(Icons.moped_rounded,
-                        color: AppColors.primary, size: 16),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'META MOTO',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () => setState(() => _expandido = false),
-                      child: const Icon(Icons.remove_rounded,
-                          color: AppColors.textMuted, size: 18),
-                    ),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () =>
-                          FlutterOverlayWindow.closeOverlay(),
-                      child: const Icon(Icons.close_rounded,
-                          color: AppColors.textMuted, size: 18),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Divider(color: Color(0xFF2A2A2A), height: 1),
-                const SizedBox(height: 10),
-
-                // Plataforma + Valor
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _plataforma,
-                            style: const TextStyle(
-                                color: AppColors.textMuted,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500),
-                          ),
-                          Text(
-                            valorStr,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (_baixaEficiencia)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.warning.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                              color: AppColors.warning.withOpacity(0.4)),
-                        ),
-                        child: const Column(
-                          children: [
-                            Icon(Icons.warning_rounded,
-                                color: AppColors.warning, size: 16),
-                            Text(
-                              'BAIXA\nEFIC.',
-                              style: TextStyle(
-                                  color: AppColors.warning,
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.w800),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-
-                const SizedBox(height: 8),
-
-                // KM + R$/km
-                Row(
-                  children: [
-                    if (_distKm != null) ...[
-                      _Chip(
-                        icon: Icons.route_rounded,
-                        label:
-                            '${_distKm!.toStringAsFixed(1).replaceAll('.', ',')} km',
-                        color: AppColors.silver,
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    if (efStr != null)
-                      _Chip(
-                        icon: Icons.speed_rounded,
-                        label: efStr,
-                        color: _baixaEficiencia
-                            ? AppColors.warning
-                            : AppColors.success,
-                      ),
-                  ],
-                ),
-
-                if (_baixaEficiencia) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppColors.warning.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      '⚠️ Corrida abaixo do seu limite de eficiência!',
-                      style: TextStyle(
-                          color: AppColors.warning,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHeader(borderColor),
+            _buildMetrics(),
+            _buildInfo(),
+          ],
         ),
       ),
     );
   }
-}
 
-class _Chip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  const _Chip({required this.icon, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
+  // ── cabeçalho: plataforma + botões ────────────────────────────────────────
+  Widget _buildHeader(Color borderColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.25)),
+        color: borderColor.withOpacity(0.12),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 12),
+          Icon(Icons.moped_rounded, color: borderColor, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            _plataforma.isNotEmpty ? _plataforma.toUpperCase() : 'META MOTO',
+            style: TextStyle(
+              color: borderColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const Spacer(),
+          GestureDetector(
+            onTap: () => setState(() => _mini = true),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.remove_rounded, color: Colors.white54, size: 18),
+            ),
+          ),
           const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                  color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+          GestureDetector(
+            onTap: () => FlutterOverlayWindow.closeOverlay(),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.close_rounded, color: Colors.white54, size: 18),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  // ── 3 métricas principais: R$/km · R$/hora · Nota ─────────────────────────
+  Widget _buildMetrics() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      child: Row(
+        children: [
+          _metric(
+            label: 'R\$/km',
+            value: _fmt(_eficiencia),
+            color: _corEficiencia(_eficiencia),
+          ),
+          _divider(),
+          _metric(
+            label: 'R\$/hora',
+            value: _fmt(_ganhoHora, dec: 0),
+            color: _corHora(_ganhoHora),
+          ),
+          _divider(),
+          _metric(
+            label: 'Nota',
+            value: _nota != null ? _fmt(_nota) : '--',
+            color: _corNota(_nota),
+            icon: _nota != null ? Icons.star_rounded : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metric({
+    required String label,
+    required String value,
+    required Color color,
+    IconData? icon,
+  }) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white54,
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // indicador colorido (igual ao Uber)
+              Container(
+                width: 4,
+                height: 20,
+                margin: const EdgeInsets.only(right: 4),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              if (icon != null) ...[
+                Icon(icon, color: color, size: 14),
+                const SizedBox(width: 2),
+              ],
+              Text(
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(
+        width: 1,
+        height: 40,
+        color: Colors.white12,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+      );
+
+  // ── linha inferior: valor · distância · tempo ─────────────────────────────
+  Widget _buildInfo() {
+    final valorStr =
+        'R\$ ${_valor.toStringAsFixed(2).replaceAll('.', ',')}';
+    final kmStr = _distKm != null
+        ? '${_distKm!.toStringAsFixed(1).replaceAll('.', ',')} km'
+        : null;
+    final minStr = _tempMin != null ? '${_tempMin} min' : null;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _infoChip(Icons.attach_money_rounded, valorStr,
+              const Color(0xFF00E676)),
+          if (kmStr != null) ...[
+            const SizedBox(width: 10),
+            _infoChip(Icons.straighten_rounded, kmStr, Colors.white70),
+          ],
+          if (minStr != null) ...[
+            const SizedBox(width: 10),
+            _infoChip(Icons.timer_outlined, minStr, Colors.white70),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _infoChip(IconData icon, String text, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 13),
+        const SizedBox(width: 3),
+        Text(
+          text,
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
