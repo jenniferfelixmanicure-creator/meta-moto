@@ -138,19 +138,24 @@ jobs:
       # ── 7b. Fix: compileSdkVersion em plugins do pub-cache ───────────────────
       - name: Fix compileSdkVersion em plugins do pub-cache
         run: |
-          # Substitui flutter.compileSdkVersion / targetSdk / minSdk em TODOS os
-          # plugins do pub-cache (geolocator_android, printing, etc.)
-          # Usa -e separado para evitar problemas com newline no YAML
+          # 1. Substitui flutter.compileSdkVersion / targetSdk / minSdk em TODOS os plugins
+          # 2. Força compileSdkVersion = 34 para QUALQUER valor hardcoded (geolocator,
+          #    printing e outros que usam valores < 31 incompatíveis com lStar/Material3)
           COUNT=0
           while IFS= read -r f; do
             sed -i \
               -e 's/flutter\.compileSdkVersion/34/g' \
               -e 's/flutter\.targetSdkVersion/34/g' \
               -e 's/flutter\.minSdkVersion/26/g' \
+              -e 's/compileSdkVersion [0-9][0-9]*/compileSdkVersion 34/g' \
+              -e 's/compileSdk = [0-9][0-9]*/compileSdk = 34/g' \
               "$f"
             COUNT=$((COUNT + 1))
           done < <(find ~/.pub-cache -name "build.gradle" -path "*pub.dev*" 2>/dev/null)
-          echo "✅ Patched $COUNT build.gradle files in pub-cache"
+          echo "✅ Patched $COUNT build.gradle files (compileSdk forçado para 34)"
+          # Confirma printing
+          PRINT_F=$(find ~/.pub-cache -name "build.gradle" -path "*printing*" 2>/dev/null | head -1)
+          [ -n "$PRINT_F" ] && grep "compileSdk" "$PRINT_F" || echo "(printing build.gradle not found)"
 
       # ── 8. Versão dinâmica (workflow_dispatch com versão manual) ─────────────
       - name: Definir versão do app
