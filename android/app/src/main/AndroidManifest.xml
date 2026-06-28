@@ -86,6 +86,19 @@
             android:foregroundServiceType="specialUse"
             android:label="Meta Moto Overlay"/>
 
+        <!-- ═══ Widget Home Screen ══════════════════════════════════════ -->
+        <receiver
+            android:name=".MetaMotoWidgetProvider"
+            android:exported="true"
+            android:label="Meta Moto Widget">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/meta_moto_widget_info"/>
+        </receiver>
+
         <!-- ═══ Metadados Flutter ════════════════════════════════════════ -->
         <meta-data
             android:name="flutterEmbedding"

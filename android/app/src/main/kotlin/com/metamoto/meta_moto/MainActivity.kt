@@ -40,6 +40,17 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
 
+                    "updateWidget" -> {
+                        try {
+                            @Suppress("UNCHECKED_CAST")
+                            val data = call.arguments as? Map<String, Any> ?: emptyMap()
+                            MetaMotoWidgetProvider.updateAll(applicationContext, data)
+                            result.success(null)
+                        } catch (e: Exception) {
+                            result.error("WIDGET_ERROR", e.message, null)
+                        }
+                    }
+
                     else -> result.notImplemented()
                 }
             }

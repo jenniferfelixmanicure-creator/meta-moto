@@ -5,6 +5,7 @@ import 'history_screen.dart';
 import 'expenses_screen.dart';
 import 'reports_screen.dart';
 import 'goals_screen.dart';
+import 'about_screen.dart';
 
 class MainNav extends StatefulWidget {
   const MainNav({super.key});
@@ -32,6 +33,25 @@ class _MainNavState extends State<MainNav> {
     _NavDef(Icons.flag_rounded,           Icons.flag_outlined,            'Metas'),
   ];
 
+  void _openAbout() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => const AboutScreen(),
+        transitionsBuilder: (_, anim, __, child) {
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 400),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -40,6 +60,7 @@ class _MainNavState extends State<MainNav> {
         currentIndex: _index,
         items: _items,
         onTap: (i) => setState(() => _index = i),
+        onLongPressLast: _openAbout,
       ),
     );
   }
@@ -56,11 +77,13 @@ class _BottomBar extends StatelessWidget {
   final int currentIndex;
   final List<_NavDef> items;
   final void Function(int) onTap;
+  final VoidCallback? onLongPressLast;
 
   const _BottomBar({
     required this.currentIndex,
     required this.items,
     required this.onTap,
+    this.onLongPressLast,
   });
 
   @override
@@ -81,16 +104,17 @@ class _BottomBar extends StatelessWidget {
             children: List.generate(items.length, (i) {
               final selected = i == currentIndex;
               final item = items[i];
+              final isLast = i == items.length - 1;
               return Expanded(
                 child: GestureDetector(
                   onTap: () => onTap(i),
+                  onLongPress: isLast ? onLongPressLast : null,
                   behavior: HitTestBehavior.opaque,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Dot indicator acima do icon ativo
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 250),
                           width: selected ? 20 : 0,

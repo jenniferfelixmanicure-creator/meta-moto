@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
 import 'main_nav.dart';
+import 'onboarding_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -33,16 +35,21 @@ class _SplashScreenState extends State<SplashScreen>
       final prov = context.read<AppProvider>();
       prov.startListeningNotifications();
       await Future.delayed(const Duration(milliseconds: 600));
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (_, __, ___) => const MainNav(),
-            transitionsBuilder: (_, anim, __, child) =>
-                FadeTransition(opacity: anim, child: child),
-            transitionDuration: const Duration(milliseconds: 400),
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final onboardingDone = prefs.getBool('onboarding_done') ?? false;
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) =>
+              onboardingDone ? const MainNav() : const OnboardingScreen(),
+          transitionsBuilder: (_, anim, __, child) =>
+              FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
     });
   }
 
@@ -63,11 +70,9 @@ class _SplashScreenState extends State<SplashScreen>
             return Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Glow de fundo
                 Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Glow vermelho
                     Opacity(
                       opacity: _glowOpacity.value * 0.4,
                       child: Container(
@@ -86,7 +91,6 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ),
                     ),
-                    // Logo
                     FadeTransition(
                       opacity: _fade,
                       child: ScaleTransition(

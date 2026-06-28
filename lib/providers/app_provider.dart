@@ -159,6 +159,78 @@ class AppProvider extends ChangeNotifier {
     return map;
   }
 
+  // ── Ganho por hora ────────────────────────────────────────────────────────
+  /// Retorna R$/h do turno ativo, calculando pelo tempo decorrido desde o início.
+  double? get ganhoHoraAtual {
+    if (_activeShift == null) return null;
+    final agora = DateTime.now();
+    final minutosDecorridos = agora.difference(_activeShift!.inicio).inMinutes;
+    if (minutosDecorridos < 1) return null;
+    final horas = minutosDecorridos / 60.0;
+    return totalHoje / horas;
+  }
+
+  /// R$/h de hoje com base no tempo do primeiro até o último registro.
+  double? get ganhoHoraHoje {
+    final hoje = ridesHoje;
+    if (hoje.isEmpty) return null;
+    final primeiro = hoje.last.data;
+    final ultimo = hoje.first.data;
+    final minutos = ultimo.difference(primeiro).inMinutes;
+    if (minutos < 5) return null;
+    final horas = minutos / 60.0;
+    return totalHoje / horas;
+  }
+
+  // ── Comparativo semanal ───────────────────────────────────────────────────
+  double get totalSemanaPassada {
+    final now = DateTime.now();
+    final inicioEsta = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final inicioPassada = inicioEsta.subtract(const Duration(days: 7));
+    final fimPassada = inicioEsta;
+    return _rides
+        .where((r) =>
+            !r.data.isBefore(inicioPassada) && r.data.isBefore(fimPassada))
+        .fold(0.0, (s, r) => s + r.valor);
+  }
+
+  int get corridasSemanaPassada {
+    final now = DateTime.now();
+    final inicioEsta = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final inicioPassada = inicioEsta.subtract(const Duration(days: 7));
+    final fimPassada = inicioEsta;
+    return _rides
+        .where((r) =>
+            !r.data.isBefore(inicioPassada) && r.data.isBefore(fimPassada))
+        .length;
+  }
+
+  /// Ganhos por dia da semana atual (index 0=seg..6=dom) e da semana passada.
+  Map<String, List<double>> get comparativoDiaSemana {
+    final now = DateTime.now();
+    final inicioEsta = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final inicioPassada = inicioEsta.subtract(const Duration(days: 7));
+
+    final esta = List<double>.filled(7, 0.0);
+    final passada = List<double>.filled(7, 0.0);
+
+    for (final r in _rides) {
+      if (!r.data.isBefore(inicioEsta) &&
+          r.data.isBefore(inicioEsta.add(const Duration(days: 7)))) {
+        final d = r.data.weekday - 1; // 0=seg
+        if (d >= 0 && d < 7) esta[d] += r.valor;
+      } else if (!r.data.isBefore(inicioPassada) &&
+          r.data.isBefore(inicioEsta)) {
+        final d = r.data.weekday - 1;
+        if (d >= 0 && d < 7) passada[d] += r.valor;
+      }
+    }
+    return {'esta': esta, 'passada': passada};
+  }
+
   // ── Carregamento ──────────────────────────────────────────────────────────
   Future<void> loadData() async {
     _isLoading = true;
@@ -180,9 +252,29 @@ class AppProvider extends ChangeNotifier {
         _startShiftTimer();
         _loc.startTracking();
       }
+
+      // Atualiza o widget da home screen Android
+      _syncWidget();
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// Envia dados atuais para o widget Android.
+  void _syncWidget() {
+    try {
+      final metaDiaria = _goal?.valorDiario ?? 0.0;
+      final ganhoHoje = totalHoje;
+      final rph = ganhoHoraAtual ?? ganhoHoraHoje ?? 0.0;
+      _channel.invokeMethod<void>('updateWidget', {
+        'ganho_hoje': ganhoHoje,
+        'meta_diaria': metaDiaria,
+        'corridas_hoje': corridasHoje,
+        'rph': rph,
+      });
+    } catch (_) {
+      // Widget pode não estar instalado — ignora silenciosamente
     }
   }
 
