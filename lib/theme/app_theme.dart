@@ -29,6 +29,7 @@ class AppColors {
   // Semânticas
   static const Color success  = Color(0xFF2ECC71);
   static const Color warning  = Color(0xFFF39C12);
+  static const Color danger   = Color(0xFFE74C3C);
   static const Color error    = Color(0xFFE74C3C);
   static const Color info     = Color(0xFF3498DB);
 
