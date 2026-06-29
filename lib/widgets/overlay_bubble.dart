@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../theme/app_theme.dart';
 
-/// Painel de leitura de corrida — aparece sobre o Uber/99 quando chega
-/// uma oferta, mostrando R$/km · R$/hora · Valor · Distância · Tempo.
-/// Inspirado no JetMax.
+/// Painel flutuante estilo JetMax — aparece sobre o Uber/99 quando chega
+/// uma oferta, mostrando R$/km · R$/hora · Nota · timer do turno · lucro líquido.
 class OverlayBubble extends StatefulWidget {
   const OverlayBubble({super.key});
 
@@ -16,16 +16,25 @@ class _OverlayBubbleState extends State<OverlayBubble> {
   String _plataforma = '';
   double _valor = 0;
   double? _distKm;
-  int? _tempMin;
-  double? _eficiencia;   // R$/km
-  double? _ganhoHora;    // R$/hora
+  int?    _tempMin;
+  double? _eficiencia;
+  double? _ganhoHora;
   double? _nota;
-  bool _baixaEficiencia = false;
-  bool _mini = false;    // modo bolinha
+  double? _lucroLiquido;
+  int?    _shiftInicioMs;
+  bool    _baixaEficiencia = false;
+  bool    _mini = false;
+
+  Timer? _clockTimer;
+  DateTime _agora = DateTime.now();
 
   @override
   void initState() {
     super.initState();
+    _clockTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => setState(() => _agora = DateTime.now()),
+    );
     FlutterOverlayWindow.overlayListener.listen((data) {
       if (data is Map) {
         setState(() {
@@ -36,24 +45,32 @@ class _OverlayBubbleState extends State<OverlayBubble> {
           _eficiencia     = (data['eficiencia'] as num?)?.toDouble();
           _ganhoHora      = (data['ganho_hora'] as num?)?.toDouble();
           _nota           = (data['nota'] as num?)?.toDouble();
+          _lucroLiquido   = (data['lucro_liquido'] as num?)?.toDouble();
+          _shiftInicioMs  = (data['shift_inicio_ms'] as num?)?.toInt();
           _baixaEficiencia = data['baixa_eficiencia'] as bool? ?? false;
-          _mini = false; // sempre expande quando chega nova oferta
+          _mini = false;
+          _agora = DateTime.now();
         });
       }
     });
   }
 
-  // ── helpers ────────────────────────────────────────────────────────────────
+  @override
+  void dispose() {
+    _clockTimer?.cancel();
+    super.dispose();
+  }
+
+  // ── helpers ───────────────────────────────────────────────────────────────
 
   String _fmt(double? v, {int dec = 2}) =>
       v != null ? v.toStringAsFixed(dec).replaceAll('.', ',') : '--';
 
-  /// Verde se bom, amarelo se médio, vermelho se ruim
   Color _corEficiencia(double? v) {
     if (v == null) return Colors.white54;
-    if (v >= 3.0) return const Color(0xFF00E676);   // verde
-    if (v >= 2.0) return const Color(0xFFFFD600);   // amarelo
-    return const Color(0xFFFF5252);                 // vermelho
+    if (v >= 3.0) return const Color(0xFF00E676);
+    if (v >= 2.0) return const Color(0xFFFFD600);
+    return const Color(0xFFFF5252);
   }
 
   Color _corHora(double? v) {
@@ -70,7 +87,17 @@ class _OverlayBubbleState extends State<OverlayBubble> {
     return const Color(0xFFFF5252);
   }
 
-  // ── build ──────────────────────────────────────────────────────────────────
+  String _shiftTimer() {
+    if (_shiftInicioMs == null) return '';
+    final inicio = DateTime.fromMillisecondsSinceEpoch(_shiftInicioMs!);
+    final diff = _agora.difference(inicio);
+    final h = diff.inHours.toString().padLeft(2, '0');
+    final m = (diff.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (diff.inSeconds % 60).toString().padLeft(2, '0');
+    return '$h:$m:$s';
+  }
+
+  // ── build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +105,6 @@ class _OverlayBubbleState extends State<OverlayBubble> {
     return _buildPainel();
   }
 
-  // Bolinha reduzida
   Widget _buildMini() {
     return GestureDetector(
       onTap: () => setState(() => _mini = false),
@@ -100,11 +126,11 @@ class _OverlayBubbleState extends State<OverlayBubble> {
     );
   }
 
-  // Painel completo estilo JetMax / Uber driver
   Widget _buildPainel() {
     final borderColor = _baixaEficiencia
         ? const Color(0xFFFFD600)
         : const Color(0xFF00C853);
+    final timer = _shiftTimer();
 
     return Material(
       color: Colors.transparent,
@@ -116,141 +142,98 @@ class _OverlayBubbleState extends State<OverlayBubble> {
           border: Border.all(color: borderColor, width: 2),
           boxShadow: [
             BoxShadow(
-              color: borderColor.withOpacity(0.35),
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
+                color: Colors.black.withOpacity(0.7),
+                blurRadius: 20,
+                spreadRadius: 4),
           ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildHeader(borderColor),
+            _buildHeader(borderColor, timer),
+            const Divider(color: Color(0xFF1A1A1A), height: 1),
             _buildMetrics(),
+            const Divider(color: Color(0xFF1A1A1A), height: 1),
             _buildInfo(),
+            if (_lucroLiquido != null) _buildLucroLiquido(),
           ],
         ),
       ),
     );
   }
 
-  // ── cabeçalho: plataforma + botões ────────────────────────────────────────
-  Widget _buildHeader(Color borderColor) {
+  // ── cabeçalho: plataforma + timer + fechar/minimizar ─────────────────────
+  Widget _buildHeader(Color accent, String timer) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: borderColor.withOpacity(0.12),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
-      ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
       child: Row(
         children: [
-          Icon(Icons.moped_rounded, color: borderColor, size: 16),
-          const SizedBox(width: 6),
-          Text(
-            _plataforma.isNotEmpty ? _plataforma.toUpperCase() : 'META MOTO',
-            style: TextStyle(
-              color: borderColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.4,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: accent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: accent.withOpacity(0.4)),
+            ),
+            child: Text(
+              _plataforma.isEmpty ? 'Corrida' : _plataforma,
+              style: TextStyle(
+                color: accent,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
+          const SizedBox(width: 8),
+          if (timer.isNotEmpty)
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined, color: Colors.white38, size: 12),
+                const SizedBox(width: 3),
+                Text(
+                  timer,
+                  style: const TextStyle(
+                      color: Colors.white38, fontSize: 11, fontFeatures: [FontFeature.tabularFigures()]),
+                ),
+              ],
+            ),
           const Spacer(),
           GestureDetector(
             onTap: () => setState(() => _mini = true),
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.remove_rounded, color: Colors.white54, size: 18),
-            ),
+            child: const Icon(Icons.minimize_rounded, color: Colors.white38, size: 20),
           ),
           const SizedBox(width: 4),
           GestureDetector(
             onTap: () => FlutterOverlayWindow.closeOverlay(),
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.close_rounded, color: Colors.white54, size: 18),
-            ),
+            child: const Icon(Icons.close_rounded, color: Colors.white38, size: 20),
           ),
         ],
       ),
     );
   }
 
-  // ── 3 métricas principais: R$/km · R$/hora · Nota ─────────────────────────
+  // ── 3 métricas grandes: R$/km · R$/hora · Nota ───────────────────────────
   Widget _buildMetrics() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          _metric(
+          _MetricBox(
             label: 'R\$/km',
-            value: _fmt(_eficiencia),
+            value: _eficiencia != null ? _fmt(_eficiencia) : '--',
             color: _corEficiencia(_eficiencia),
           ),
           _divider(),
-          _metric(
+          _MetricBox(
             label: 'R\$/hora',
-            value: _fmt(_ganhoHora, dec: 0),
+            value: _ganhoHora != null ? _fmt(_ganhoHora, dec: 0) : '--',
             color: _corHora(_ganhoHora),
           ),
           _divider(),
-          _metric(
+          _MetricBox(
             label: 'Nota',
             value: _nota != null ? _fmt(_nota) : '--',
             color: _corNota(_nota),
-            icon: _nota != null ? Icons.star_rounded : null,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _metric({
-    required String label,
-    required String value,
-    required Color color,
-    IconData? icon,
-  }) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white54,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // indicador colorido (igual ao Uber)
-              Container(
-                width: 4,
-                height: 20,
-                margin: const EdgeInsets.only(right: 4),
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              if (icon != null) ...[
-                Icon(icon, color: color, size: 14),
-                const SizedBox(width: 2),
-              ],
-              Text(
-                value,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  height: 1,
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -259,22 +242,21 @@ class _OverlayBubbleState extends State<OverlayBubble> {
 
   Widget _divider() => Container(
         width: 1,
-        height: 40,
-        color: Colors.white12,
+        height: 36,
+        color: const Color(0xFF1A1A1A),
         margin: const EdgeInsets.symmetric(horizontal: 4),
       );
 
-  // ── linha inferior: valor · distância · tempo ─────────────────────────────
+  // ── linha inferior: valor · km · minutos ─────────────────────────────────
   Widget _buildInfo() {
-    final valorStr =
-        'R\$ ${_valor.toStringAsFixed(2).replaceAll('.', ',')}';
+    final valorStr = 'R\$ ${_valor.toStringAsFixed(2).replaceAll('.', ',')}';
     final kmStr = _distKm != null
         ? '${_distKm!.toStringAsFixed(1).replaceAll('.', ',')} km'
         : null;
     final minStr = _tempMin != null ? '${_tempMin} min' : null;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -293,21 +275,72 @@ class _OverlayBubbleState extends State<OverlayBubble> {
     );
   }
 
+  // ── lucro líquido (combustível descontado) ────────────────────────────────
+  Widget _buildLucroLiquido() {
+    final color = (_lucroLiquido! > 0)
+        ? const Color(0xFF00E676)
+        : const Color(0xFFFF5252);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.local_gas_station_rounded,
+              color: Colors.white30, size: 12),
+          const SizedBox(width: 4),
+          Text(
+            'Lucro líquido: R\$ ${_lucroLiquido!.toStringAsFixed(2).replaceAll('.', ',')}',
+            style: TextStyle(
+                color: color, fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _infoChip(IconData icon, String text, Color color) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, color: color, size: 13),
         const SizedBox(width: 3),
-        Text(
-          text,
-          style: TextStyle(
-            color: color,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        Text(text,
+            style: TextStyle(
+                color: color, fontSize: 13, fontWeight: FontWeight.w600)),
       ],
+    );
+  }
+}
+
+// ── Caixa de métrica grande ───────────────────────────────────────────────────
+
+class _MetricBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _MetricBox(
+      {required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(color: Colors.white38, fontSize: 10)),
+        ],
+      ),
     );
   }
 }

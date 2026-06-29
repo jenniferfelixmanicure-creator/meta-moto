@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/database_helper.dart';
 import '../models/ride.dart';
 import '../models/goal.dart';
 import '../models/expense.dart';
 import '../models/shift.dart';
+import '../models/vehicle_profile.dart';
 import '../services/location_service.dart';
 import '../services/overlay_service.dart';
 
@@ -31,11 +34,24 @@ class AppProvider extends ChangeNotifier {
   double _kmTotalSalvo = 0.0;
 
   // ── Eficiência ────────────────────────────────────────────────────────────
-  double _limiteEficiencia = 2.0; // R$/km mínimo aceitável
-  List<DetectedRide> _detectedRides = []; // histórico das últimas detecções
+  double _limiteEficiencia = 2.0;
+  List<DetectedRide> _detectedRides = [];
 
   double get limiteEficiencia => _limiteEficiencia;
   List<DetectedRide> get detectedRides => List.unmodifiable(_detectedRides);
+
+  // ── Veículo ───────────────────────────────────────────────────────────────
+  VehicleProfile _vehicleProfile = const VehicleProfile(type: VehicleType.moto);
+  VehicleProfile get vehicleProfile => _vehicleProfile;
+
+  // ── Taxa de aceitação ─────────────────────────────────────────────────────
+  int _ofertasVistasHoje  = 0;
+  int _ofertasAceitasHoje = 0;
+  int get ofertasVistasHoje  => _ofertasVistasHoje;
+  int get ofertasAceitasHoje => _ofertasAceitasHoje;
+  double get taxaAceitacaoHoje => _ofertasVistasHoje == 0
+      ? 0
+      : _ofertasAceitasHoje / _ofertasVistasHoje;
 
   // ── Getters básicos ───────────────────────────────────────────────────────
   List<Ride> get rides => _rides;
@@ -159,6 +175,51 @@ class AppProvider extends ChangeNotifier {
     return map;
   }
 
+  // ── Recordes ──────────────────────────────────────────────────────────────
+  Ride? get recordeCorridaHoje {
+    final hoje = ridesHoje;
+    if (hoje.isEmpty) return null;
+    return hoje.reduce((a, b) => a.valor > b.valor ? a : b);
+  }
+
+  Ride? get recordeCorridaSemana {
+    final now = DateTime.now();
+    final inicio = DateTime(now.year, now.month, now.day)
+        .subtract(Duration(days: now.weekday - 1));
+    final semana = _rides
+        .where((r) => !r.data.isBefore(inicio))
+        .toList();
+    if (semana.isEmpty) return null;
+    return semana.reduce((a, b) => a.valor > b.valor ? a : b);
+  }
+
+  /// Ganhos agrupados por hora do dia (hoje).
+  Map<int, double> get ganhosPorHoraHoje {
+    final Map<int, double> map = {};
+    for (final r in ridesHoje) {
+      final h = r.data.hour;
+      map[h] = (map[h] ?? 0) + r.valor;
+    }
+    return map;
+  }
+
+  /// Ganhos por plataforma hoje.
+  Map<String, double> get ganhosPorPlataformaHoje {
+    final Map<String, double> map = {};
+    for (final r in ridesHoje) {
+      map[r.plataforma] = (map[r.plataforma] ?? 0) + r.valor;
+    }
+    return map;
+  }
+
+  /// Melhor hora do dia hoje (mais rentável).
+  Map<String, dynamic>? get melhorHoraHoje {
+    final mapa = ganhosPorHoraHoje;
+    if (mapa.isEmpty) return null;
+    final melhor = mapa.entries.reduce((a, b) => a.value > b.value ? a : b);
+    return {'hora': melhor.key, 'valor': melhor.value};
+  }
+
   // ── Ganho por hora ────────────────────────────────────────────────────────
   /// Retorna R$/h do turno ativo, calculando pelo tempo decorrido desde o início.
   double? get ganhoHoraAtual {
@@ -247,6 +308,8 @@ class AppProvider extends ChangeNotifier {
       // Carrega limite de eficiência salvo
       final prefs = await SharedPreferences.getInstance();
       _limiteEficiencia = prefs.getDouble('limite_eficiencia') ?? 2.0;
+      await _loadOfferStats(prefs);
+      await _loadVehicleProfile(prefs);
 
       if (_activeShift != null) {
         _startShiftTimer();
@@ -485,6 +548,7 @@ class AppProvider extends ChangeNotifier {
 
     // ── OFERTA: só mostra o overlay, NÃO salva no banco ──────────────────────
     if (tipo == 'oferta') {
+      await registrarOfertaVista();
       await _overlay.mostrarOferta(
         plataforma: plataforma,
         valor: valor,
@@ -494,6 +558,8 @@ class AppProvider extends ChangeNotifier {
         ganhoHora: ganhoHora,
         nota: nota,
         limiteEficiencia: _limiteEficiencia,
+        shiftInicioMs: _activeShift?.inicio.millisecondsSinceEpoch,
+        fuelCostPerKm: _vehicleProfile.fuelCostPerKm(),
       );
       notifyListeners();
       return;
@@ -528,6 +594,90 @@ class AppProvider extends ChangeNotifier {
     );
 
     notifyListeners();
+  }
+
+  // ── Taxa de aceitação ─────────────────────────────────────────────────────
+  Future<void> _loadOfferStats(SharedPreferences prefs) async {
+    final today = DateTime.now();
+    final saved = prefs.getString('ofertas_data') ?? '';
+    final todayStr =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    if (saved != todayStr) {
+      // Novo dia: zera contadores
+      _ofertasVistasHoje  = 0;
+      _ofertasAceitasHoje = 0;
+      await prefs.setString('ofertas_data', todayStr);
+      await prefs.setInt('ofertas_vistas',  0);
+      await prefs.setInt('ofertas_aceitas', 0);
+    } else {
+      _ofertasVistasHoje  = prefs.getInt('ofertas_vistas')  ?? 0;
+      _ofertasAceitasHoje = prefs.getInt('ofertas_aceitas') ?? 0;
+    }
+  }
+
+  Future<void> registrarOfertaVista() async {
+    _ofertasVistasHoje++;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('ofertas_vistas', _ofertasVistasHoje);
+    notifyListeners();
+  }
+
+  Future<void> registrarOfertaAceita() async {
+    _ofertasVistasHoje++;
+    _ofertasAceitasHoje++;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('ofertas_vistas',  _ofertasVistasHoje);
+    await prefs.setInt('ofertas_aceitas', _ofertasAceitasHoje);
+    notifyListeners();
+  }
+
+  Future<void> registrarOfertaRecusada() async {
+    _ofertasVistasHoje++;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('ofertas_vistas', _ofertasVistasHoje);
+    notifyListeners();
+  }
+
+  Future<void> resetarOfertasHoje() async {
+    _ofertasVistasHoje  = 0;
+    _ofertasAceitasHoje = 0;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('ofertas_vistas',  0);
+    await prefs.setInt('ofertas_aceitas', 0);
+    notifyListeners();
+  }
+
+  // ── Veículo ───────────────────────────────────────────────────────────────
+  Future<void> _loadVehicleProfile(SharedPreferences prefs) async {
+    try {
+      final raw = prefs.getString('vehicle_profile');
+      if (raw != null && raw.isNotEmpty) {
+        _vehicleProfile = VehicleProfile.fromJson(
+            Map<String, dynamic>.from(jsonDecode(raw) as Map));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> saveVehicleProfile(VehicleProfile profile) async {
+    _vehicleProfile = profile;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('vehicle_profile', jsonEncode(profile.toJson()));
+    notifyListeners();
+  }
+
+  // ── Exportação CSV ────────────────────────────────────────────────────────
+  Future<void> exportarCSV() async {
+    final fmt = NumberFormat('0.00', 'pt_BR');
+    final buf = StringBuffer();
+    buf.writeln('Data,Plataforma,Valor,Observacao');
+    for (final r in _rides) {
+      final data =
+          '${r.data.day.toString().padLeft(2, '0')}/${r.data.month.toString().padLeft(2, '0')}/${r.data.year}';
+      final obs = (r.observacao ?? '').replaceAll(',', ';');
+      buf.writeln('$data,${r.plataforma},${fmt.format(r.valor)},$obs');
+    }
+    await Share.share(buf.toString(),
+        subject: 'Meta Moto — corridas exportadas');
   }
 
   // ── Relatórios ────────────────────────────────────────────────────────────

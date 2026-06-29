@@ -26,11 +26,18 @@ class OverlayService {
     double? ganhoHora,
     double? nota,
     double limiteEficiencia = 2.0,
+    int? shiftInicioMs,
+    double? fuelCostPerKm,
   }) async {
     if (!await hasPermission()) return;
 
     final baixaEficiencia =
         eficiencia != null && eficiencia < limiteEficiencia;
+
+    // Lucro líquido: valor - custo de combustível (distância * custo/km)
+    final lucroLiquido = (fuelCostPerKm != null && distKm != null)
+        ? valor - distKm * fuelCostPerKm
+        : null;
 
     final data = <String, dynamic>{
       'plataforma': plataforma,
@@ -41,8 +48,12 @@ class OverlayService {
       if (eficiencia != null) 'eficiencia': eficiencia,
       if (ganhoHora != null) 'ganho_hora': ganhoHora,
       if (nota != null) 'nota': nota,
+      if (lucroLiquido != null) 'lucro_liquido': lucroLiquido,
+      if (shiftInicioMs != null) 'shift_inicio_ms': shiftInicioMs,
       'baixa_eficiencia': baixaEficiencia,
     };
+
+    final overlayHeight = (shiftInicioMs != null || lucroLiquido != null) ? 220 : 190;
 
     if (_overlayAtivo) {
       // Overlay já aberto: só atualiza os dados
@@ -50,7 +61,7 @@ class OverlayService {
     } else {
       // Abre o overlay pela primeira vez
       await FlutterOverlayWindow.showOverlay(
-        height: 190,
+        height: overlayHeight,
         width: 330,
         alignment: OverlayAlignment.topCenter,
         flag: OverlayFlag.defaultFlag,

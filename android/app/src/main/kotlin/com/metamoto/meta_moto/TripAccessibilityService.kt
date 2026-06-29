@@ -2,6 +2,12 @@ package com.metamoto.meta_moto
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
+import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
+import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -129,19 +135,74 @@ class TripAccessibilityService : AccessibilityService() {
             else                           -> null
         }
 
+        val baixa = eficiencia != null && eficiencia < 2.0
+
         Log.i(TAG, "[$pkg] OFERTA DETECTADA → R\$ $valor | km=$distKm | " +
-            "min=$tempMin | R\$/km=$eficiencia | R\$/h=$ganhoHora")
+            "min=$tempMin | R\$/km=$eficiencia | R\$/h=$ganhoHora | baixa=$baixa")
         Log.d(TAG, "  textos: ${fullText.take(200)}")
 
+        vibrar(baixa)
+        acordarTela()
+
         RideEventStreamHandler.sendOffer(
-            platform   = if (pkg.contains("uber")) "Uber" else "99",
-            valor      = valor,
-            distKm     = distKm,
-            tempMin    = tempMin,
-            eficiencia = eficiencia,
-            ganhoHora  = ganhoHora,
-            nota       = null,
+            platform        = if (pkg.contains("uber")) "Uber" else "99",
+            valor           = valor,
+            distKm          = distKm,
+            tempMin         = tempMin,
+            eficiencia      = eficiencia,
+            ganhoHora       = ganhoHora,
+            nota            = null,
+            baixaEficiencia = baixa,
         )
+    }
+
+    /**
+     * 2 pulsos curtos = boa oferta (≥ R$2/km)
+     * 3 pulsos longos = oferta ruim (< R$2/km)
+     */
+    private fun vibrar(baixaEficiencia: Boolean) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                val v = vm.defaultVibrator
+                if (baixaEficiencia) {
+                    // 3 pulsos longos: aviso
+                    v.vibrate(VibrationEffect.createWaveform(
+                        longArrayOf(0, 200, 100, 200, 100, 200), -1))
+                } else {
+                    // 2 pulsos curtos: boa oferta
+                    v.vibrate(VibrationEffect.createWaveform(
+                        longArrayOf(0, 80, 80, 80), -1))
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                val v = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                if (baixaEficiencia) {
+                    @Suppress("DEPRECATION")
+                    v.vibrate(longArrayOf(0, 200, 100, 200, 100, 200), -1)
+                } else {
+                    @Suppress("DEPRECATION")
+                    v.vibrate(longArrayOf(0, 80, 80, 80), -1)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Vibração falhou: ${e.message}")
+        }
+    }
+
+    /** Acende a tela se estiver desligada (WakeLock de 3 segundos). */
+    private fun acordarTela() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            @Suppress("DEPRECATION")
+            val wl = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "MetaMoto:OfertaWakeLock"
+            )
+            wl.acquire(3_000L)
+        } catch (e: Exception) {
+            Log.w(TAG, "WakeLock falhou: ${e.message}")
+        }
     }
 
     /** Percorre recursivamente a árvore de views e coleta textos não-vazios. */

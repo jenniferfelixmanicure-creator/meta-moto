@@ -3,6 +3,7 @@ import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'history_screen.dart';
 import 'expenses_screen.dart';
+import 'analytics_screen.dart';
 import 'reports_screen.dart';
 import 'goals_screen.dart';
 import 'about_screen.dart';
@@ -21,6 +22,7 @@ class _MainNavState extends State<MainNav> {
     HomeScreen(),
     HistoryScreen(),
     ExpensesScreen(),
+    AnalyticsScreen(),
     ReportsScreen(),
     GoalsScreen(),
   ];
@@ -29,6 +31,7 @@ class _MainNavState extends State<MainNav> {
     _NavDef(Icons.home_rounded,           Icons.home_outlined,            'Início'),
     _NavDef(Icons.receipt_long_rounded,   Icons.receipt_long_outlined,    'Histórico'),
     _NavDef(Icons.account_balance_wallet_rounded, Icons.account_balance_wallet_outlined, 'Despesas'),
+    _NavDef(Icons.insights_rounded,       Icons.insights_outlined,        'Análise'),
     _NavDef(Icons.bar_chart_rounded,      Icons.bar_chart_outlined,       'Relatórios'),
     _NavDef(Icons.flag_rounded,           Icons.flag_outlined,            'Metas'),
   ];

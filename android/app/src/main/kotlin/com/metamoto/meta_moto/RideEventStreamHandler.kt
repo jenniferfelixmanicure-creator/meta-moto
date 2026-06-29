@@ -23,24 +23,28 @@ object RideEventStreamHandler : EventChannel.StreamHandler {
      * O overlay mostrará R$/km, R$/hora e valor antes do motorista aceitar.
      */
     fun sendOffer(
-        platform:   String,
-        valor:      Double,
-        distKm:     Double? = null,
-        tempMin:    Int?    = null,
-        eficiencia: Double? = null,
-        ganhoHora:  Double? = null,
-        nota:       Double? = null,
+        platform:        String,
+        valor:           Double,
+        distKm:          Double? = null,
+        tempMin:         Int?    = null,
+        eficiencia:      Double? = null,
+        ganhoHora:       Double? = null,
+        nota:            Double? = null,
+        baixaEficiencia: Boolean = false,
+        shiftInicioMs:   Long?   = null,
     ) {
         val map = mutableMapOf<String, Any>(
-            "platform" to platform,
-            "value"    to valor,
-            "tipo"     to "oferta",
+            "platform"         to platform,
+            "value"            to valor,
+            "tipo"             to "oferta",
+            "baixa_eficiencia" to baixaEficiencia,
         )
-        distKm?.let    { map["dist_km"]    = it }
-        tempMin?.let   { map["temp_min"]   = it }
-        eficiencia?.let { map["eficiencia"] = it }
-        ganhoHora?.let { map["ganho_hora"] = it }
-        nota?.let      { map["nota"]       = it }
+        distKm?.let      { map["dist_km"]        = it }
+        tempMin?.let     { map["temp_min"]        = it }
+        eficiencia?.let  { map["eficiencia"]      = it }
+        ganhoHora?.let   { map["ganho_hora"]      = it }
+        nota?.let        { map["nota"]            = it }
+        shiftInicioMs?.let { map["shift_inicio_ms"] = it }
 
         eventSink?.success(map)
     }
