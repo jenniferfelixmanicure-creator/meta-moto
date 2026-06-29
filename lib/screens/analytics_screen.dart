@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
+import 'vehicle_profile_screen.dart';
 
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
@@ -16,6 +17,15 @@ class AnalyticsScreen extends StatelessWidget {
         backgroundColor: AppColors.background,
         title: const Text('Análise', style: TextStyle(fontWeight: FontWeight.w700)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.directions_car_rounded),
+            tooltip: 'Perfil do veículo',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const VehicleProfileScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.share_rounded),
             onPressed: () => context.read<AppProvider>().exportarCSV(),

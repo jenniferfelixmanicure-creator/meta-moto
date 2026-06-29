@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -505,16 +506,34 @@ class AppProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  StreamSubscription? _overlaySub;
+
   void startListeningNotifications() {
     _notificationSub?.cancel();
     _notificationSub = _eventChannel
         .receiveBroadcastStream()
         .listen(_onNotificationReceived, onError: (_) {});
+
+    // Escuta ações enviadas pelo overlay (Aceitar / Recusar)
+    _overlaySub?.cancel();
+    _overlaySub = FlutterOverlayWindow.overlayListener.listen((data) {
+      if (data is! Map) return;
+      final action = data['action'] as String?;
+      if (action == 'aceitar') {
+        registrarOfertaAceita();
+        _overlay.fechar();
+      } else if (action == 'recusar') {
+        registrarOfertaRecusada();
+        _overlay.fechar();
+      }
+    });
   }
 
   void stopListeningNotifications() {
     _notificationSub?.cancel();
     _notificationSub = null;
+    _overlaySub?.cancel();
+    _overlaySub = null;
   }
 
   void _onNotificationReceived(dynamic event) async {
@@ -571,6 +590,7 @@ class AppProvider extends ChangeNotifier {
       valor: valor,
       plataforma: plataforma,
       data: DateTime.now(),
+      distKm: distKm,
       observacao: distKm != null
           ? 'Auto | ${distKm.toStringAsFixed(1)} km'
           : 'Adicionado automaticamente',

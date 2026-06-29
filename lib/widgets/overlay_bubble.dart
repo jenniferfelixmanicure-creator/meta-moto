@@ -5,7 +5,8 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../theme/app_theme.dart';
 
 /// Painel flutuante estilo JetMax — aparece sobre o Uber/99 quando chega
-/// uma oferta, mostrando R$/km · R$/hora · Nota · timer do turno · lucro líquido.
+/// uma oferta, mostrando R$/km · R$/hora · Nota · timer do turno · lucro líquido
+/// e botões Aceitar / Recusar que enviam a ação de volta ao app.
 class OverlayBubble extends StatefulWidget {
   const OverlayBubble({super.key});
 
@@ -38,16 +39,18 @@ class _OverlayBubbleState extends State<OverlayBubble> {
     );
     FlutterOverlayWindow.overlayListener.listen((data) {
       if (data is Map) {
+        // Ignora mensagens de ação que o overlay enviou (eco)
+        if (data['action'] != null) return;
         setState(() {
-          _plataforma     = data['plataforma'] as String? ?? '';
-          _valor          = (data['valor'] as num?)?.toDouble() ?? 0;
-          _distKm         = (data['dist_km'] as num?)?.toDouble();
-          _tempMin        = (data['temp_min'] as num?)?.toInt();
-          _eficiencia     = (data['eficiencia'] as num?)?.toDouble();
-          _ganhoHora      = (data['ganho_hora'] as num?)?.toDouble();
-          _nota           = (data['nota'] as num?)?.toDouble();
-          _lucroLiquido   = (data['lucro_liquido'] as num?)?.toDouble();
-          _shiftInicioMs  = (data['shift_inicio_ms'] as num?)?.toInt();
+          _plataforma      = data['plataforma'] as String? ?? '';
+          _valor           = (data['valor'] as num?)?.toDouble() ?? 0;
+          _distKm          = (data['dist_km'] as num?)?.toDouble();
+          _tempMin         = (data['temp_min'] as num?)?.toInt();
+          _eficiencia      = (data['eficiencia'] as num?)?.toDouble();
+          _ganhoHora       = (data['ganho_hora'] as num?)?.toDouble();
+          _nota            = (data['nota'] as num?)?.toDouble();
+          _lucroLiquido    = (data['lucro_liquido'] as num?)?.toDouble();
+          _shiftInicioMs   = (data['shift_inicio_ms'] as num?)?.toInt();
           _baixaEficiencia = data['baixa_eficiencia'] as bool? ?? false;
           _mini = false;
           _agora = DateTime.now();
@@ -157,13 +160,15 @@ class _OverlayBubbleState extends State<OverlayBubble> {
             const Divider(color: Color(0xFF1A1A1A), height: 1),
             _buildInfo(),
             if (_lucroLiquido != null) _buildLucroLiquido(),
+            const Divider(color: Color(0xFF1A1A1A), height: 1),
+            _buildAcoes(),
           ],
         ),
       ),
     );
   }
 
-  // ── cabeçalho: plataforma + timer + fechar/minimizar ─────────────────────
+  // ── cabeçalho ─────────────────────────────────────────────────────────────
   Widget _buildHeader(Color accent, String timer) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
@@ -194,26 +199,30 @@ class _OverlayBubbleState extends State<OverlayBubble> {
                 Text(
                   timer,
                   style: const TextStyle(
-                      color: Colors.white38, fontSize: 11, fontFeatures: [FontFeature.tabularFigures()]),
+                      color: Colors.white38,
+                      fontSize: 11,
+                      fontFeatures: [FontFeature.tabularFigures()]),
                 ),
               ],
             ),
           const Spacer(),
           GestureDetector(
             onTap: () => setState(() => _mini = true),
-            child: const Icon(Icons.minimize_rounded, color: Colors.white38, size: 20),
+            child: const Icon(Icons.minimize_rounded,
+                color: Colors.white38, size: 20),
           ),
           const SizedBox(width: 4),
           GestureDetector(
             onTap: () => FlutterOverlayWindow.closeOverlay(),
-            child: const Icon(Icons.close_rounded, color: Colors.white38, size: 20),
+            child: const Icon(Icons.close_rounded,
+                color: Colors.white38, size: 20),
           ),
         ],
       ),
     );
   }
 
-  // ── 3 métricas grandes: R$/km · R$/hora · Nota ───────────────────────────
+  // ── 3 métricas grandes ────────────────────────────────────────────────────
   Widget _buildMetrics() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -224,13 +233,13 @@ class _OverlayBubbleState extends State<OverlayBubble> {
             value: _eficiencia != null ? _fmt(_eficiencia) : '--',
             color: _corEficiencia(_eficiencia),
           ),
-          _divider(),
+          _vDivider(),
           _MetricBox(
             label: 'R\$/hora',
             value: _ganhoHora != null ? _fmt(_ganhoHora, dec: 0) : '--',
             color: _corHora(_ganhoHora),
           ),
-          _divider(),
+          _vDivider(),
           _MetricBox(
             label: 'Nota',
             value: _nota != null ? _fmt(_nota) : '--',
@@ -241,23 +250,24 @@ class _OverlayBubbleState extends State<OverlayBubble> {
     );
   }
 
-  Widget _divider() => Container(
+  Widget _vDivider() => Container(
         width: 1,
         height: 36,
         color: const Color(0xFF1A1A1A),
         margin: const EdgeInsets.symmetric(horizontal: 4),
       );
 
-  // ── linha inferior: valor · km · minutos ─────────────────────────────────
+  // ── linha de info: valor · km · minutos ──────────────────────────────────
   Widget _buildInfo() {
-    final valorStr = 'R\$ ${_valor.toStringAsFixed(2).replaceAll('.', ',')}';
+    final valorStr =
+        'R\$ ${_valor.toStringAsFixed(2).replaceAll('.', ',')}';
     final kmStr = _distKm != null
         ? '${_distKm!.toStringAsFixed(1).replaceAll('.', ',')} km'
         : null;
     final minStr = _tempMin != null ? '${_tempMin} min' : null;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -276,14 +286,13 @@ class _OverlayBubbleState extends State<OverlayBubble> {
     );
   }
 
-  // ── lucro líquido (combustível descontado) ────────────────────────────────
+  // ── lucro líquido ─────────────────────────────────────────────────────────
   Widget _buildLucroLiquido() {
     final color = (_lucroLiquido! > 0)
         ? const Color(0xFF00E676)
         : const Color(0xFFFF5252);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -300,6 +309,39 @@ class _OverlayBubbleState extends State<OverlayBubble> {
     );
   }
 
+  // ── botões Aceitar / Recusar ──────────────────────────────────────────────
+  Widget _buildAcoes() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: _AcaoBtn(
+              label: '✅  Aceitar',
+              color: const Color(0xFF00C853),
+              onTap: () async {
+                // Envia ação de volta ao app principal para incrementar contador
+                await FlutterOverlayWindow.shareData({'action': 'aceitar'});
+                await FlutterOverlayWindow.closeOverlay();
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _AcaoBtn(
+              label: '❌  Recusar',
+              color: const Color(0xFFFF5252),
+              onTap: () async {
+                await FlutterOverlayWindow.shareData({'action': 'recusar'});
+                await FlutterOverlayWindow.closeOverlay();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _infoChip(IconData icon, String text, Color color) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -308,13 +350,15 @@ class _OverlayBubbleState extends State<OverlayBubble> {
         const SizedBox(width: 3),
         Text(text,
             style: TextStyle(
-                color: color, fontSize: 13, fontWeight: FontWeight.w600)),
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600)),
       ],
     );
   }
 }
 
-// ── Caixa de métrica grande ───────────────────────────────────────────────────
+// ── Métrica grande ────────────────────────────────────────────────────────────
 
 class _MetricBox extends StatelessWidget {
   final String label;
@@ -339,8 +383,43 @@ class _MetricBox extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(label,
-              style: const TextStyle(color: Colors.white38, fontSize: 10)),
+              style:
+                  const TextStyle(color: Colors.white38, fontSize: 10)),
         ],
+      ),
+    );
+  }
+}
+
+// ── Botão de ação (aceitar/recusar) ──────────────────────────────────────────
+
+class _AcaoBtn extends StatelessWidget {
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _AcaoBtn(
+      {required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.4)),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w700),
+          ),
+        ),
       ),
     );
   }

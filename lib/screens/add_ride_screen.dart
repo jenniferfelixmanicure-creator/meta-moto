@@ -14,13 +14,15 @@ class AddRideScreen extends StatefulWidget {
 
 class _AddRideScreenState extends State<AddRideScreen> {
   final _valorController = TextEditingController();
-  final _obsController = TextEditingController();
+  final _kmController   = TextEditingController();
+  final _obsController  = TextEditingController();
   String _plataforma = Plataforma.uber;
   bool _saving = false;
 
   @override
   void dispose() {
     _valorController.dispose();
+    _kmController.dispose();
     _obsController.dispose();
     super.dispose();
   }
@@ -139,6 +141,67 @@ class _AddRideScreenState extends State<AddRideScreen> {
 
           const SizedBox(height: 14),
 
+          // Distância (opcional)
+          const Text('Distância (opcional)', style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _kmController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d,.]'))],
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+            decoration: InputDecoration(
+              suffixText: 'km',
+              suffixStyle: const TextStyle(color: AppColors.textMuted),
+              hintText: '0,0',
+              hintStyle: TextStyle(color: AppColors.textMuted, fontSize: 16),
+              filled: true,
+              fillColor: AppColors.surfaceLight,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: AppColors.primary, width: 2),
+              ),
+            ),
+          ),
+
+          // Preview eficiência ao vivo
+          ValueListenableBuilder(
+            valueListenable: _valorController,
+            builder: (_, __, ___) => ValueListenableBuilder(
+              valueListenable: _kmController,
+              builder: (_, __, ___) {
+                final v = double.tryParse(
+                    _valorController.text.replaceAll(',', '.').trim());
+                final km = double.tryParse(
+                    _kmController.text.replaceAll(',', '.').trim());
+                if (v != null && v > 0 && km != null && km > 0) {
+                  final ef = v / km;
+                  final color = ef >= 3.0
+                      ? AppColors.success
+                      : ef >= 2.0
+                          ? AppColors.warning
+                          : AppColors.danger;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'R\$ ${ef.toStringAsFixed(2).replaceAll('.', ',')} / km',
+                      style: TextStyle(
+                          color: color,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
           // Obs
           TextField(
             controller: _obsController,
@@ -185,12 +248,16 @@ class _AddRideScreenState extends State<AddRideScreen> {
       );
       return;
     }
+    final kmRaw = _kmController.text.replaceAll(',', '.').trim();
+    final distKm = kmRaw.isNotEmpty ? double.tryParse(kmRaw) : null;
+
     setState(() => _saving = true);
     final ride = Ride(
       valor: valor,
       plataforma: _plataforma,
       data: DateTime.now(),
       observacao: _obsController.text.trim().isEmpty ? null : _obsController.text.trim(),
+      distKm: (distKm != null && distKm > 0) ? distKm : null,
     );
     await context.read<AppProvider>().addRide(ride);
     if (mounted) Navigator.pop(context);

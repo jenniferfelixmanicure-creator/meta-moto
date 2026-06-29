@@ -20,7 +20,19 @@ class DatabaseHelper {
   Future<Database> _initDB() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'meta_moto.db');
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _createDB,
+      onUpgrade: _upgradeDB,
+    );
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      // Adiciona coluna dist_km na tabela rides
+      await db.execute('ALTER TABLE rides ADD COLUMN dist_km REAL');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -31,7 +43,8 @@ class DatabaseHelper {
         plataforma TEXT NOT NULL,
         data TEXT NOT NULL,
         observacao TEXT,
-        shift_id INTEGER
+        shift_id INTEGER,
+        dist_km REAL
       )
     ''');
     await db.execute('''

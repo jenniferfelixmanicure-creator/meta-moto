@@ -5,6 +5,7 @@ class Ride {
   final DateTime data;
   final String? observacao;
   final int? shiftId;
+  final double? distKm;
 
   Ride({
     this.id,
@@ -13,7 +14,12 @@ class Ride {
     required this.data,
     this.observacao,
     this.shiftId,
+    this.distKm,
   });
+
+  /// R$/km — null se distância desconhecida
+  double? get eficiencia =>
+      (distKm != null && distKm! > 0) ? valor / distKm! : null;
 
   Map<String, dynamic> toMap() {
     return {
@@ -23,6 +29,7 @@ class Ride {
       'data': data.toIso8601String(),
       'observacao': observacao,
       'shift_id': shiftId,
+      'dist_km': distKm,
     };
   }
 
@@ -34,6 +41,7 @@ class Ride {
       data: DateTime.parse(map['data'] as String),
       observacao: map['observacao'] as String?,
       shiftId: map['shift_id'] as int?,
+      distKm: (map['dist_km'] as num?)?.toDouble(),
     );
   }
 
@@ -44,6 +52,7 @@ class Ride {
     DateTime? data,
     String? observacao,
     int? shiftId,
+    double? distKm,
   }) {
     return Ride(
       id: id ?? this.id,
@@ -52,6 +61,7 @@ class Ride {
       data: data ?? this.data,
       observacao: observacao ?? this.observacao,
       shiftId: shiftId ?? this.shiftId,
+      distKm: distKm ?? this.distKm,
     );
   }
 }
